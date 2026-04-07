@@ -1,0 +1,38 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GaussDB 运维系统{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">GaussDB 运维系统</div>
+    {% if user.is_authenticated %}
+    <nav>
+      <a href="{% url 'dashboard' %}">看板</a>
+      <a href="{% url 'ticket_list' %}">工单</a>
+      <a href="{% url 'ticket_create' %}">新建工单</a>
+      <a href="{% url 'duty_schedule_list' %}">值班表</a>
+      <a href="/admin/">后台配置</a>
+    </nav>
+    <div>
+      <span class="muted">{{ user.username }}</span>
+      <a href="{% url 'logout' %}" style="margin-left:1rem;">退出</a>
+    </div>
+    {% endif %}
+  </header>
+  <main class="container">
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

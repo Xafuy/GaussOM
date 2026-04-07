@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ ticket.ticket_no }}{% endblock %}
+{% block content %}
+<h1>{{ ticket.ticket_no }} <span class="badge">{{ stage_label }}</span></h1>
+<p class="muted">
+  来源 {{ ticket.get_source_type_display }} · 问题类型 {{ ticket.get_issue_type_display|default:"—" }} ·
+  状态 {{ ticket.get_status_display }} · 创建人 {{ ticket.creator_user.username }}
+  {% if ticket.current_assignee %} · 当前处理人 <strong>{{ ticket.current_assignee.username }}</strong>{% endif %}
+</p>
+
+<div class="card">
+  <h2>本阶段表单</h2>
+  {% if not field_rows %}
+  <p class="muted">未配置本阶段动态字段（可在后台发布表单 Schema）。</p>
+  {% endif %}
+  {% if can_operate and ticket.status == 'processing' %}
+  <form method="post">
+    {% csrf_token %}
+    {% for row in field_rows %}
+    <div class="form-row">
+      <label for="f_{{ row.field.field_code }}">{{ row.field.field_name }}{% if row.binding.is_required %} *{% endif %}</label>
+      {% if row.options %}
+      <select name="f_{{ row.field.field_code }}" id="f_{{ row.field.field_code }}">
+        <option value="">---------</option>
+        {% for val, lab in row.options %}
+        <option value="{{ val }}" {% if row.value == val %}selected{% endif %}>{{ lab }}</option>
+        {% endfor %}
+      </select>
+      {% else %}
+      <textarea name="f_{{ row.field.field_code }}" id="f_{{ row.field.field_code }}" rows="4">{{ row.value }}</textarea>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" name="save_fields" value="1" class="btn secondary">保存本阶段字段</button>
+  </form>
+  {% else %}
+  {% for row in field_rows %}
+  <p><strong>{{ row.field.field_name }}</strong><br><span class="muted">{{ row.value|default:"—" }}</span></p>
+  {% endfor %}
+  {% endif %}
+</div>
+
+{% if can_operate and ticket.status == 'processing' %}
+<div class="card">
+  <h2>流转操作</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-row">
+      <label>备注 / 原因</label>
+      <textarea name="comment" rows="2"></textarea>
+    </div>
+    {% for a in actions %}
+    <div style="margin-bottom:.75rem;padding-bottom:.75rem;border-bottom:1px solid var(--border);">
+      <button type="submit" name="action_code" value="{{ a.action_code }}" class="btn">{{ a.label }}</button>
+      {% if a.needs_assignee_pick %}
+      <label class="muted" style="display:inline;margin-left:.5rem;">接手人</label>
+      <select name="target_user_id" style="max-width:220px;display:inline-block;">
+        <option value="">—</option>
+        {% for u in users %}
+        <option value="{{ u.id }}">{{ u.username }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+    </div>
+    {% empty %}
+    <p class="muted">当前无可用操作（可能已关单）。</p>
+    {% endfor %}
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>流转记录</h2>
+  <table class="data">
+    <thead>
+      <tr><th>时间</th><th>动作</th><th>从</th><th>到</th><th>操作人</th><th>备注</th></tr>
+    </thead>
+    <tbody>
+      {% for tr in transitions %}
+      <tr>
+        <td class="muted">{{ tr.created_at|date:"Y-m-d H:i" }}</td>
+        <td>{{ tr.action_code }}</td>
+        <td>{{ tr.from_stage_code|default:"—" }}</td>
+        <td>{{ tr.to_stage_code }}</td>
+        <td>{{ tr.operator_user.username }}</td>
+        <td>{{ tr.comment|default:"" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="muted">暂无记录。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

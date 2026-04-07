@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}工单列表{% endblock %}
+{% block content %}
+<h1>工单列表</h1>
+<p><a class="btn" href="{% url 'ticket_create' %}">新建工单</a></p>
+<form method="get" class="card" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;">
+  <div class="form-row" style="margin:0;">
+    <label>关键词</label>
+    <input type="text" name="q" value="{{ request.GET.q }}" placeholder="单号 / 用户">
+  </div>
+  <div class="form-row" style="margin:0;">
+    <label>状态</label>
+    <select name="status" style="max-width:200px;">
+      <option value="">全部</option>
+      <option value="processing" {% if request.GET.status == 'processing' %}selected{% endif %}>处理中</option>
+      <option value="closed" {% if request.GET.status == 'closed' %}selected{% endif %}>已关闭</option>
+    </select>
+  </div>
+  <button type="submit" class="btn secondary">筛选</button>
+</form>
+
+<div class="card">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>单号</th><th>阶段</th><th>类型</th><th>状态</th><th>处理人</th><th>创建人</th><th>创建时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tickets %}
+      <tr>
+        <td><a href="{% url 'ticket_detail' t.pk %}">{{ t.ticket_no }}</a></td>
+        <td>{{ t.current_stage_code }}</td>
+        <td>{{ t.get_issue_type_display|default:"—" }}</td>
+        <td>{{ t.get_status_display }}</td>
+        <td>{% if t.current_assignee %}{{ t.current_assignee.username }}{% else %}—{% endif %}</td>
+        <td>{{ t.creator_user.username }}</td>
+        <td class="muted">{{ t.created_at|date:"Y-m-d H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="muted">暂无工单。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if is_paginated %}
+  <p class="muted">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</p>
+  {% endif %}
+</div>
+{% endblock %}

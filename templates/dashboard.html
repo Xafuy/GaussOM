@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}看板 — GaussDB 运维系统{% endblock %}
+{% block content %}
+<h1>运营看板</h1>
+<div class="grid-2">
+  <div class="card">
+    <h2>处理中 — 按阶段</h2>
+    {% if stage_rows %}
+    <table class="data">
+      <thead><tr><th>阶段</th><th>数量</th></tr></thead>
+      <tbody>
+        {% for r in stage_rows %}
+        <tr><td>{{ r.label }}</td><td>{{ r.count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">暂无处理中工单。</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h2>人力负载（当前处理人）</h2>
+    {% if assignee_rows %}
+    <table class="data">
+      <thead><tr><th>用户</th><th>在办</th></tr></thead>
+      <tbody>
+        {% for u in assignee_rows %}
+        <tr><td>{{ u.username }}</td><td>{{ u.open_count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">暂无分配数据。</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>日级 KPI 快照</h2>
+  {% if kpi_snapshot %}
+  <p class="muted">日期 {{ kpi_snapshot.stat_date }} · 新建 {{ kpi_snapshot.ticket_count }} · 关闭 {{ kpi_snapshot.closed_count }}
+    {% if kpi_snapshot.avg_close_minutes %} · 平均闭环 {{ kpi_snapshot.avg_close_minutes }} 分钟{% endif %}
+  </p>
+  {% else %}
+  <p class="muted">尚未生成统计，可在服务器执行：<code>python manage.py refresh_dashboard_stats</code></p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>阶段流转漏斗（最近快照）</h2>
+  {% if funnel_rows %}
+  <table class="data">
+    <thead><tr><th>日期</th><th>从</th><th>到</th><th>次数</th><th>占比</th></tr></thead>
+    <tbody>
+      {% for f in funnel_rows %}
+      <tr>
+        <td>{{ f.stat_date }}</td>
+        <td>{{ f.from_stage_code }}</td>
+        <td>{{ f.to_stage_code }}</td>
+        <td>{{ f.transfer_count }}</td>
+        <td>{% if f.transfer_ratio %}{{ f.transfer_ratio }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">暂无漏斗数据。</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>近期流转量（按日）</h2>
+  {% if transition_trend %}
+  <table class="data">
+    <thead><tr><th>日期</th><th>流转事件数</th></tr></thead>
+    <tbody>
+      {% for t in transition_trend %}
+      <tr><td>{{ t.d }}</td><td>{{ t.c }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">暂无数据。</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>最新工单</h2>
+  <table class="data">
+    <thead>
+      <tr><th>单号</th><th>阶段</th><th>状态</th><th>处理人</th><th>创建人</th></tr>
+    </thead>
+    <tbody>
+      {% for t in recent_tickets %}
+      <tr>
+        <td><a href="{% url 'ticket_detail' t.pk %}">{{ t.ticket_no }}</a></td>
+        <td>{{ t.current_stage_code }}</td>
+        <td>{{ t.get_status_display }}</td>
+        <td>{% if t.current_assignee %}{{ t.current_assignee.username }}{% else %}—{% endif %}</td>
+        <td>{{ t.creator_user.username }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted">暂无工单，请先 <a href="{% url 'ticket_create' %}">新建</a>。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

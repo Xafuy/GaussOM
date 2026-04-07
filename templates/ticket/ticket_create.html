@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}新建工单{% endblock %}
+{% block content %}
+<h1>新建工单</h1>
+<div class="card">
+  <form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="form-row">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% if field.errors %}<div class="muted">{{ field.errors }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% if form.non_field_errors %}
+    <div class="muted">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <button type="submit" class="btn">创建</button>
+    <a href="{% url 'ticket_list' %}" class="btn secondary" style="margin-left:.5rem;">返回</a>
+  </form>
+</div>
+{% endblock %}

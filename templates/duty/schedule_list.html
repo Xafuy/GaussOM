@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}值班表{% endblock %}
+{% block content %}
+<h1>值班表</h1>
+<p class="muted">成员与轮询顺序请在 <a href="/admin/duty/dutyschedule/">后台</a> 维护；分单将按「内核 / 管控」表轮询。</p>
+<div class="card">
+  <table class="data">
+    <thead>
+      <tr><th>编码</th><th>名称</th><th>类型</th><th>适用日</th><th>活跃成员数</th></tr>
+    </thead>
+    <tbody>
+      {% for s in schedules %}
+      <tr>
+        <td>{{ s.schedule_code }}</td>
+        <td>{{ s.schedule_name }}</td>
+        <td>{{ s.get_schedule_type_display }}</td>
+        <td>{{ s.get_applicable_day_type_display }}</td>
+        <td>{{ s.active_members }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted">暂无值班表，请执行 bootstrap 或在后台创建。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

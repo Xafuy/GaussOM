@@ -1,0 +1,168 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --border: #2d3a4d;
+  --text: #e8eef7;
+  --muted: #8b9bb4;
+  --accent: #3d7ea6;
+  --accent-hover: #4f92bd;
+  --danger: #c45c5c;
+  --ok: #5a9e6f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.topbar nav a {
+  margin-right: 1rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+h1,
+h2,
+h3 {
+  margin-top: 0;
+  font-weight: 600;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+table.data th,
+table.data td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.4rem;
+  text-align: left;
+}
+table.data th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.btn.secondary {
+  background: transparent;
+  color: var(--text);
+}
+.btn:hover {
+  background: var(--accent-hover);
+}
+
+input[type="text"],
+input[type="password"],
+select,
+textarea {
+  width: 100%;
+  max-width: 520px;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #0c1118;
+  color: var(--text);
+}
+
+.form-row {
+  margin-bottom: 0.75rem;
+}
+.form-row label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+}
+.messages li {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.35rem;
+  background: #2a2438;
+  border: 1px solid var(--border);
+}
+.messages .error {
+  border-color: var(--danger);
+}
+.messages .success {
+  border-color: var(--ok);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+@media (max-width: 800px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  background: #243044;
+  border: 1px solid var(--border);
+}
