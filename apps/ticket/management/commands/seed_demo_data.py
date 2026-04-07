@@ -2,7 +2,6 @@
 写入便于联调的演示数据：用户、值班成员、审核白名单、固定单号工单与部分字段值。
 可重复执行：按 ticket_no / username 幂等；可用 --purge 先删演示工单再重建。
 """
-from __future__ import annotations
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -129,7 +128,7 @@ class Command(BaseCommand):
             "工单：OM-DEMO-0001 … 0006"
         )
 
-    def _ensure_users(self) -> dict[str, SysUser]:
+    def _ensure_users(self):
         out = {}
         for username, display_name, is_staff in DEMO_USERS:
             u, created = SysUser.objects.get_or_create(
@@ -151,7 +150,7 @@ class Command(BaseCommand):
             out[username] = u
         return out
 
-    def _ensure_duty_members(self, schedule: DutySchedule, user_list: list[SysUser]):
+    def _ensure_duty_members(self, schedule: DutySchedule, user_list):
         for i, user in enumerate(user_list):
             DutyScheduleMember.objects.update_or_create(
                 schedule=schedule,
@@ -175,13 +174,13 @@ class Command(BaseCommand):
         self,
         ticket_no: str,
         stage: str,
-        assignee: SysUser | None,
+        assignee,
         source_type: str,
         issue_type: str,
         creator: SysUser,
         description: str,
         *,
-        creator_group: SysOrgGroup | None,
+        creator_group,
     ):
         t, created = Ticket.objects.get_or_create(
             ticket_no=ticket_no,

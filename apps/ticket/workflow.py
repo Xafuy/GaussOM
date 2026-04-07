@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
+from collections import namedtuple
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -20,64 +18,63 @@ from apps.ticket.models import Ticket, TicketAssigneeHistory, TicketOperationLog
 
 User = get_user_model()
 
-
-@dataclass
-class TransitionSpec:
-    action_code: str
-    label: str
-    to_stage: str
-    needs_assignee_pick: bool = False
-    closes_ticket: bool = False
+TransitionSpec = namedtuple(
+    "TransitionSpec",
+    ["action_code", "label", "to_stage", "needs_assignee_pick", "closes_ticket"],
+)
 
 
 SELF_ENTRY_STAGE = STAGE_OPS_ANALYSIS
 
 
-def allowed_actions(ticket: Ticket) -> list[TransitionSpec]:
+def allowed_actions(ticket):
     if ticket.status != Ticket.TicketStatus.PROCESSING:
         return []
     s = ticket.current_stage_code
-    specs: list[TransitionSpec] = []
+    specs = []
     if s == STAGE_SUBMIT:
-        specs.append(TransitionSpec("submit_review", "送审（进入问题审核）", STAGE_REVIEW))
+        specs.append(TransitionSpec("submit_review", "送审（进入问题审核）", STAGE_REVIEW, False, False))
     elif s == STAGE_REVIEW:
-        specs.append(TransitionSpec("pass_to_ops", "通过 → 运维分析", STAGE_OPS_ANALYSIS))
-        specs.append(TransitionSpec("reject_to_submit", "退回提单", STAGE_SUBMIT))
+        specs.append(TransitionSpec("pass_to_ops", "通过 → 运维分析", STAGE_OPS_ANALYSIS, False, False))
+        specs.append(TransitionSpec("reject_to_submit", "退回提单", STAGE_SUBMIT, False, False))
         specs.append(
             TransitionSpec(
                 "close_ticket",
                 "审核关闭（提前关单）",
                 STAGE_REVIEW_CLOSE,
-                closes_ticket=True,
+                False,
+                True,
             )
         )
     elif s == STAGE_OPS_ANALYSIS:
-        specs.append(TransitionSpec("to_dev", "转开发人员分析", STAGE_DEV_ANALYSIS))
-        specs.append(TransitionSpec("ops_direct_close", "运维直接闭环", STAGE_OPS_CLOSE))
+        specs.append(TransitionSpec("to_dev", "转开发人员分析", STAGE_DEV_ANALYSIS, False, False))
+        specs.append(TransitionSpec("ops_direct_close", "运维直接闭环", STAGE_OPS_CLOSE, False, False))
         specs.append(
             TransitionSpec(
                 "transfer_ops",
                 "内部转单（运维分析）",
                 STAGE_OPS_ANALYSIS,
-                needs_assignee_pick=True,
+                True,
+                False,
             )
         )
     elif s == STAGE_DEV_ANALYSIS:
-        specs.append(TransitionSpec("to_dev_audit", "提交开发审核", STAGE_DEV_AUDIT))
+        specs.append(TransitionSpec("to_dev_audit", "提交开发审核", STAGE_DEV_AUDIT, False, False))
         specs.append(
             TransitionSpec(
                 "transfer_dev",
                 "内部转单（开发分析）",
                 STAGE_DEV_ANALYSIS,
-                needs_assignee_pick=True,
+                True,
+                False,
             )
         )
     elif s == STAGE_DEV_AUDIT:
-        specs.append(TransitionSpec("audit_pass", "审核通过 → 运维闭环", STAGE_OPS_CLOSE))
-        specs.append(TransitionSpec("audit_reject", "退回开发分析", STAGE_DEV_ANALYSIS))
+        specs.append(TransitionSpec("audit_pass", "审核通过 → 运维闭环", STAGE_OPS_CLOSE, False, False))
+        specs.append(TransitionSpec("audit_reject", "退回开发分析", STAGE_DEV_ANALYSIS, False, False))
     elif s == STAGE_OPS_CLOSE:
         specs.append(
-            TransitionSpec("to_review_close", "提交终审关闭", STAGE_REVIEW_CLOSE)
+            TransitionSpec("to_review_close", "提交终审关闭", STAGE_REVIEW_CLOSE, False, False)
         )
     elif s == STAGE_REVIEW_CLOSE:
         specs.append(
@@ -85,13 +82,14 @@ def allowed_actions(ticket: Ticket) -> list[TransitionSpec]:
                 "finalize_close",
                 "确认关单",
                 STAGE_REVIEW_CLOSE,
-                closes_ticket=True,
+                False,
+                True,
             )
         )
     return specs
 
 
-def _log_op(ticket: Ticket, user: User, op: str, before: dict, after: dict) -> None:
+def _log_op(ticket, user, op, before, after):
     TicketOperationLog.objects.create(
         ticket=ticket,
         operation_type=op,
@@ -108,8 +106,8 @@ def apply_transition(
     action_code: str,
     *,
     comment: str = "",
-    target_user_id: int | None = None,
-) -> tuple[bool, str]:
+    target_user_id=None,
+):
     specs = {s.action_code: s for s in allowed_actions(ticket)}
     spec = specs.get(action_code)
     if not spec:
@@ -182,7 +180,7 @@ def apply_transition(
     return True, "操作成功。"
 
 
-def user_can_operate_ticket(ticket: Ticket, user: User) -> bool:
+def user_can_operate_ticket(ticket, user):
     if not user.is_authenticated:
         return False
     if user.is_staff or getattr(user, "is_admin", False):
@@ -194,7 +192,7 @@ def user_can_operate_ticket(ticket: Ticket, user: User) -> bool:
     return False
 
 
-def generate_ticket_no() -> str:
+def generate_ticket_no():
     from datetime import datetime
 
     prefix = datetime.now().strftime("OM-%Y%m%d")

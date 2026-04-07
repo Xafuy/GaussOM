@@ -1,7 +1,5 @@
 """动态表单：读取已发布 Schema + 阶段绑定，校验与保存。"""
 
-from __future__ import annotations
-
 from django.contrib.auth import get_user_model
 
 from apps.form.models import (
@@ -15,7 +13,7 @@ from apps.ticket.models import Ticket
 User = get_user_model()
 
 
-def get_published_schema() -> FormSchema | None:
+def get_published_schema():
     return (
         FormSchema.objects.filter(status=FormSchema.SchemaStatus.PUBLISHED)
         .order_by("-published_at", "-id")
@@ -31,7 +29,7 @@ def bindings_for_stage(schema: FormSchema, stage_code: str):
     )
 
 
-def get_field_values_map(ticket: Ticket, stage_code: str) -> dict[str, str]:
+def get_field_values_map(ticket: Ticket, stage_code: str):
     rows = TicketFieldValue.objects.filter(ticket=ticket, stage_code=stage_code)
     return {r.field_code: r.field_value_text or "" for r in rows}
 
@@ -41,11 +39,11 @@ def validate_and_save_stage(
     stage_code: str,
     post_data,
     user: User,
-) -> tuple[bool, list[str]]:
+):
     schema = get_published_schema()
     if not schema:
         return True, []
-    errors: list[str] = []
+    errors = []
     bindings = list(bindings_for_stage(schema, stage_code))
     for b in bindings:
         f = b.field
@@ -79,7 +77,7 @@ def validate_and_save_stage(
     return True, []
 
 
-def options_for_field(field: FieldDefinition) -> list[tuple[str, str]]:
+def options_for_field(field: FieldDefinition):
     if not field.option_set_id:
         return []
     return [

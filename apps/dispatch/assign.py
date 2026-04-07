@@ -1,7 +1,5 @@
 """分单：按值班表轮询 + 兜底（与设计模块04一致，初版可配置）。"""
 
-from __future__ import annotations
-
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
@@ -32,7 +30,7 @@ def _active_members_qs(schedule: DutySchedule):
 @transaction.atomic
 def _round_robin_pick(
     schedule: DutySchedule, biz_scene: str, ticket, policy=None, rule=None
-) -> User | None:
+):
     members = list(_active_members_qs(schedule))
     if not members:
         return None
@@ -67,7 +65,7 @@ def _round_robin_pick(
     return chosen.user
 
 
-def _pick_schedule_for_issue(issue_type: str) -> DutySchedule | None:
+def _pick_schedule_for_issue(issue_type: str):
     if issue_type == "control":
         s = (
             DutySchedule.objects.filter(
@@ -87,7 +85,7 @@ def _pick_schedule_for_issue(issue_type: str) -> DutySchedule | None:
     )
 
 
-def _dev_audit_assignee(ticket: Ticket) -> User | None:
+def _dev_audit_assignee(ticket: Ticket):
     from apps.form.models import TicketFieldValue
     from apps.system.models import SysReviewerWhitelist
 
@@ -116,7 +114,7 @@ def _dev_audit_assignee(ticket: Ticket) -> User | None:
 
 def assign_on_stage_enter(ticket: Ticket, to_stage: str, operator: User) -> None:
     """进入某阶段时的默认分单（无值班成员则兜底为提单人）。"""
-    assignee: User | None = None
+    assignee = None
     schedule = _pick_schedule_for_issue(ticket.issue_type or "")
 
     if to_stage == STAGE_SUBMIT:
