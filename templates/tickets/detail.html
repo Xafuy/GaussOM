@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}#{{ ticket.number }} {{ ticket.title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <p class="meta"><a href="{% url 'ticket_list' %}">← 返回列表</a></p>
+  <div class="ticket-head">
+    <h1>#{{ ticket.number }} {{ ticket.title }}</h1>
+    <div>
+      <span class="badge">{{ ticket.get_stage_display }}</span>
+    {% if ticket.is_self_service %}
+      <span class="badge">自提单</span>
+    {% endif %}
+    </div>
+  </div>
+  <p class="meta ticket-meta">提单人：{{ ticket.reporter.get_full_name|default:ticket.reporter.username }} · 当前处理人：{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% else %}未分配{% endif %}</p>
+  {% if ticket.description %}
+  <p style="white-space:pre-wrap">{{ ticket.description }}</p>
+  {% endif %}
+  <hr class="section-divider">
+  <div class="ticket-actions">
+    {% if next_stage and can_advance %}
+    <form method="post" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="advance">
+      <button type="submit" class="btn">推进到下一阶段：{{ next_stage_label }}</button>
+    </form>
+    {% endif %}
+
+    {% if can_transfer %}
+    <form method="post" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="transfer">
+      <input
+        type="text"
+        name="assignee_query"
+        list="assignee_candidates"
+        class="js-user-suggest"
+        data-sync-hidden-id="assignee_id_hidden"
+        placeholder="搜索处理人（姓名/账号）"
+        autocomplete="off"
+      >
+      <input type="hidden" name="assignee_id" id="assignee_id_hidden" value="{% if ticket.assignee %}{{ ticket.assignee.id }}{% endif %}">
+      <datalist id="assignee_candidates">
+        {% for u in active_users %}
+          <option value="{{ u.get_full_name|default:u.username }}（{{ u.username }}）" data-id="{{ u.id }}"></option>
+        {% endfor %}
+      </datalist>
+      <button type="submit" class="btn btn-secondary">转派</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if stage_field_defs %}
+<div class="card">
+  <h2 class="compact-title">阶段字段</h2>
+  {% if can_edit_fields %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="update_fields">
+    {% for row in stage_form_rows %}
+      <div class="form-group">
+        <label for="fld_{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required-star">*</span>{% endif %}</label>
+        {% if row.widget == "textarea" %}
+        <textarea id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>{{ row.value }}</textarea>
+        {% elif row.widget == "select" %}
+        <select id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>
+          <option value="">请选择</option>
+          {% for opt in row.options %}
+            <option value="{{ opt }}" {% if row.value == opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+        {% elif row.widget == "date" %}
+        <input id="fld_{{ row.key }}" name="{{ row.key }}" type="date" value="{{ row.value }}"{% if row.required %} required{% endif %}>
+        {% elif row.widget == "user_select" %}
+        <input
+          id="fld_{{ row.key }}"
+          name="{{ row.key }}"
+          type="text"
+          list="users_{{ row.key }}"
+          class="js-user-suggest"
+          value="{{ row.value }}"
+          placeholder="输入姓名/账号搜索"
+          autocomplete="off"
+          {% if row.required %} required{% endif %}
+        >
+        <datalist id="users_{{ row.key }}">
+          {% for u in active_users %}
+            <option value="{{ u.get_full_name|default:u.username }}"></option>
+            <option value="{{ u.username }}"></option>
+          {% endfor %}
+        </datalist>
+        {% else %}
+        <input id="fld_{{ row.key }}" name="{{ row.key }}" type="text" value="{{ row.value }}"{% if row.required %} required{% endif %}>
+        {% endif %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="btn">保存阶段字段</button>
+  </form>
+  {% else %}
+    <p class="meta">你没有字段编辑权限（需要 `ticket:edit_fields`）。</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 class="compact-title">阶段变更</h2>
+  <ul class="meta dense-list">
+    {% for log in logs %}
+      <li>{{ log.created_at|date:"Y-m-d H:i" }} — {{ log.get_from_stage_display|default:"—" }} → {{ log.get_to_stage_display }}{% if log.note %} — {{ log.note }}{% endif %}{% if log.operator %}（{{ log.operator.get_full_name|default:log.operator.username }}）{% endif %}</li>
+    {% empty %}
+      <li>无记录</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h2 class="compact-title">各阶段已填数据</h2>
+  <div class="toolbar">
+    <a href="?snapshot=key" class="btn {% if snapshot_mode != 'key' %}btn-secondary{% endif %}">关键字段</a>
+    <a href="?snapshot=all" class="btn {% if snapshot_mode != 'all' %}btn-secondary{% endif %}">全部字段</a>
+  </div>
+  {% if stage_snapshots %}
+    {% for s in stage_snapshots %}
+      <div style="margin-bottom:10px;">
+        <p class="meta" style="margin:0 0 4px;"><span class="badge">{{ s.stage_label }}</span></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>字段</th><th>值</th></tr>
+            </thead>
+            <tbody>
+              {% for r in s.rows %}
+              <tr>
+                <td>{{ r.label }}</td>
+                <td style="white-space:pre-wrap;">{{ r.value }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="meta">暂无阶段字段数据</p>
+  {% endif %}
+</div>
+{% endblock %}

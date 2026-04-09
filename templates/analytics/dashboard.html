@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}统计分析{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>统计分析 Dashboard</h1>
+  <form method="get" class="toolbar">
+    <select name="range">
+      <option value="7d" {% if dashboard_data.range_mode == "7d" %}selected{% endif %}>近7天</option>
+      <option value="30d" {% if dashboard_data.range_mode == "30d" %}selected{% endif %}>近30天</option>
+      <option value="90d" {% if dashboard_data.range_mode == "90d" %}selected{% endif %}>近90天</option>
+      <option value="custom" {% if dashboard_data.range_mode == "custom" %}selected{% endif %}>自定义</option>
+    </select>
+    <input type="date" name="start" value="{{ dashboard_data.start }}">
+    <input type="date" name="end" value="{{ dashboard_data.end }}">
+    <button class="btn btn-secondary" type="submit">刷新</button>
+  </form>
+  <div class="kpi-grid">
+    <div class="card kpi"><div class="meta">总工单</div><div class="kpi-num">{{ dashboard_data.overview.total }}</div></div>
+    <div class="card kpi"><div class="meta">关闭率</div><div class="kpi-num">{{ dashboard_data.overview.close_rate }}%</div></div>
+    <div class="card kpi"><div class="meta">平均闭环时长</div><div class="kpi-num">{{ dashboard_data.overview.avg_close_hours }}h</div></div>
+    <div class="card kpi"><div class="meta">超时率</div><div class="kpi-num">{{ dashboard_data.overview.overdue_rate }}%</div></div>
+  </div>
+</div>
+
+<div class="chart-grid">
+  <div class="card"><h2 class="compact-title">人力投入（按处理人）</h2><div id="chart_assignee" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">人力投入（按操作人）</h2><div id="chart_operator" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">问题归属（模块）</h2><div id="chart_module" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">问题归属（严重性）</h2><div id="chart_severity" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">透传分析（阶段流转）</h2><div id="chart_flow" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">透传分析（阶段停留时长）</h2><div id="chart_dwell" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">SLA 趋势</h2><div id="chart_sla" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">排班联动（白天/夜间）</h2><div id="chart_daynight" class="chart"></div><p class="meta">请假重叠次数：{{ dashboard_data.schedule.leave_overlap }}</p></div>
+</div>
+
+{{ dashboard_data|json_script:"dashboardData" }}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+  (function () {
+    var data = JSON.parse(document.getElementById("dashboardData").textContent);
+    function bar(domId, items, yName) {
+      var dom = document.getElementById(domId);
+      if (!dom) return;
+      var chart = echarts.init(dom);
+      chart.setOption({
+        tooltip: {},
+        xAxis: { type: "category", data: items.map(function (i) { return i.name; }) },
+        yAxis: { type: "value", name: yName || "" },
+        series: [{ type: "bar", data: items.map(function (i) { return i.value; }) }],
+      });
+    }
+    function pie(domId, items) {
+      var dom = document.getElementById(domId);
+      if (!dom) return;
+      var chart = echarts.init(dom);
+      chart.setOption({
+        tooltip: { trigger: "item" },
+        legend: { bottom: 0 },
+        series: [{ type: "pie", radius: "65%", data: items }],
+      });
+    }
+    function line(domId, x, ys) {
+      var dom = document.getElementById(domId);
+      if (!dom) return;
+      var chart = echarts.init(dom);
+      chart.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { data: Object.keys(ys) },
+        xAxis: { type: "category", data: x },
+        yAxis: { type: "value" },
+        series: Object.keys(ys).map(function (k) { return { name: k, type: "line", data: ys[k], smooth: true }; }),
+      });
+    }
+    bar("chart_assignee", data.manpower.by_assignee, "工单数");
+    bar("chart_operator", data.manpower.by_operator, "操作次数");
+    bar("chart_module", data.ownership.module, "工单数");
+    pie("chart_severity", data.ownership.severity);
+    bar("chart_flow", data.flow.transitions, "次数");
+    bar("chart_dwell", data.flow.dwell_avg_hours, "小时");
+    line("chart_sla", data.sla.x, { "新增工单": data.sla.total, "超时工单": data.sla.overdue });
+    pie("chart_daynight", data.schedule.day_night);
+    window.addEventListener("resize", function () {
+      ["chart_assignee","chart_operator","chart_module","chart_severity","chart_flow","chart_dwell","chart_sla","chart_daynight"].forEach(function(id){
+        var inst = echarts.getInstanceByDom(document.getElementById(id));
+        if (inst) inst.resize();
+      });
+    });
+  })();
+</script>
+{% endblock %}

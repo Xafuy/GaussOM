@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}值班管理{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>值班管理</h1>
+  <p class="subtitle">展示多轮值表/多值班表、今日值班、请假与按提单人身份的分单路由策略。</p>
+</div>
+
+<div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">提单人身份路由（配置生效）</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>提单人身份</th>
+          <th>时间窗口</th>
+          <th>轮值表</th>
+          <th>值班表</th>
+          <th>优先级</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in route_rules %}
+        <tr>
+          <td>{{ r.identity }}</td>
+          <td>{{ r.get_time_window_display }}</td>
+          <td>{% if r.rota_table %}{{ r.rota_table.name }}{% else %}-{% endif %}</td>
+          <td>{% if r.duty_sheet %}{{ r.duty_sheet.name }}{% else %}-{% endif %}</td>
+          <td>{{ r.priority }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="meta">暂无生效路由规则，请到后台配置“身份分单路由规则”。</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">轮值表（启用）</h2>
+  {% for rota in rota_tables %}
+    <p class="meta" style="margin:10px 0 6px;">{{ rota.name }}（{{ rota.slug }}）</p>
+    <div class="table-wrap" style="margin-bottom:10px;">
+      <table>
+        <thead>
+          <tr>
+            <th>顺序</th>
+            <th>成员</th>
+            <th>状态</th>
+            <th>进行中单据数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in rota.members.all %}
+          <tr>
+            <td>{{ m.sort_order }}</td>
+            <td>{{ m.user.get_full_name|default:m.user.username }}</td>
+            <td>{{ m.get_status_display }}</td>
+            <td>{{ m.active_ticket_count }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="meta">无成员</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% empty %}
+    <p class="meta">暂无启用轮值表。</p>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">值班日历</h2>
+  <form method="get" class="toolbar">
+    <select name="sheet" style="padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.12);">
+      {% for s in duty_sheets %}
+      <option value="{{ s.id }}" {% if selected_sheet and selected_sheet.id == s.id %}selected{% endif %}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary">切换值班表</button>
+    <span class="meta">{{ month_label }}</span>
+  </form>
+  {% if selected_sheet and can_edit_schedule %}
+  <form method="post" class="toolbar" style="align-items:flex-start;">
+    {% csrf_token %}
+    <input type="hidden" name="edit_date" value="{{ edit_date }}">
+    <input type="hidden" name="action" value="save_day">
+    <div>
+      <div class="meta">编辑日期：{{ edit_date }}</div>
+      <select name="user_ids" multiple size="6" style="padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.12);min-width:260px;">
+        {% for u in active_users %}
+          <option value="{{ u.id }}" {% if u.id|stringformat:"s" in selected_user_ids_for_date %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button type="submit" class="btn">保存当天值班</button>
+      <button type="submit" name="action" value="clear_day" class="btn btn-secondary">清空当天</button>
+    </div>
+  </form>
+  {% elif selected_sheet %}
+  <p class="meta">当前为只读视图；仅管理员可编辑值班与排班。</p>
+  {% endif %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>周一</th>
+          <th>周二</th>
+          <th>周三</th>
+          <th>周四</th>
+          <th>周五</th>
+          <th>周六</th>
+          <th>周日</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for week in calendar_rows %}
+        <tr>
+          {% for day in week %}
+          <td style="vertical-align:top;min-width:120px;{% if not day.in_month %}opacity:.45;{% endif %}{% if day.is_today %}background:#eef6ff;{% endif %}">
+            <div class="meta">
+              <a href="?sheet={{ selected_sheet.id }}&date={{ day.date|date:'Y-m-d' }}">{{ day.date|date:"m-d" }}</a>
+            </div>
+            {% for n in day.names %}
+              <div>{{ n }}</div>
+            {% empty %}
+              <div class="meta">-</div>
+            {% endfor %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="meta">暂无值班日历数据</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">已审批请假（最近20条）</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>申请人</th>
+          <th>类型</th>
+          <th>开始</th>
+          <th>结束</th>
+          <th>审批人</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lv in approved_leaves %}
+        <tr>
+          <td>{{ lv.applicant.get_full_name|default:lv.applicant.username }}</td>
+          <td>{{ lv.leave_type }}</td>
+          <td>{{ lv.start_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ lv.end_at|date:"Y-m-d H:i" }}</td>
+          <td>{% if lv.approver %}{{ lv.approver.get_full_name|default:lv.approver.username }}{% else %}-{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="meta">暂无已审批请假</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

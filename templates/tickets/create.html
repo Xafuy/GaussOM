@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}新建运维单{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>新建运维单</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-group">
+      <label for="title">标题</label>
+      <input id="title" name="title" type="text" required maxlength="512" value="{{ title_value }}">
+    </div>
+    <div class="form-group">
+      <label for="description">描述</label>
+      <textarea id="description" name="description">{{ description_value }}</textarea>
+    </div>
+
+    <h2 class="compact-title">HCS提单字段</h2>
+    {% for row in hcs_rows %}
+      <div class="form-group">
+        <label for="fld_{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required-star">*</span>{% endif %}</label>
+        {% if row.widget == "textarea" %}
+          <textarea id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>{{ row.value }}</textarea>
+        {% elif row.widget == "select" %}
+          <select id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>
+            <option value="">请选择</option>
+            {% for opt in row.options %}
+              <option value="{{ opt }}" {% if row.value == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        {% elif row.widget == "date" %}
+          <input id="fld_{{ row.key }}" name="{{ row.key }}" type="date" value="{{ row.value }}"{% if row.required %} required{% endif %}>
+        {% elif row.widget == "user_select" %}
+          <input
+            id="fld_{{ row.key }}"
+            name="{{ row.key }}"
+            type="text"
+            list="users_{{ row.key }}"
+            class="js-user-suggest"
+            value="{{ row.value }}"
+            placeholder="输入姓名/账号搜索"
+            autocomplete="off"
+            {% if row.required %} required{% endif %}
+          >
+          <datalist id="users_{{ row.key }}">
+            {% for u in active_users %}
+              <option value="{{ u.get_full_name|default:u.username }}"></option>
+              <option value="{{ u.username }}"></option>
+            {% endfor %}
+          </datalist>
+        {% else %}
+          <input id="fld_{{ row.key }}" name="{{ row.key }}" type="text" value="{{ row.value }}"{% if row.required %} required{% endif %}>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" name="is_self_service" value="1">
+        运维自提单（直接进入「运维人员分析」，当前处理人设为自己）
+      </label>
+    </div>
+    <button type="submit" class="btn">提交</button>
+    <a href="{% url 'ticket_list' %}" class="btn btn-secondary">取消</a>
+  </form>
+</div>
+{% endblock %}

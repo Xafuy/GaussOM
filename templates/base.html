@@ -1,0 +1,174 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GaussDB 运维系统{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/site.css' %}">
+</head>
+<body>
+  <header class="shell-header">
+    <div class="shell-header-inner">
+      <a class="brand" href="{% url 'home' %}">GaussDB 运维系统</a>
+      <nav class="nav-links">
+        {% if user.is_authenticated %}
+          <a href="{% url 'ticket_list' %}">运维单</a>
+          <a href="{% url 'duty_overview' %}">值班管理</a>
+          {% if can_view_dashboard %}
+            <a href="{% url 'dashboard' %}">统计分析</a>
+          {% endif %}
+          {% if user.is_staff %}
+            <a href="/admin/">管理</a>
+          {% endif %}
+          <span class="meta">{{ user.get_full_name|default:user.username }}</span>
+          {% if nav_identities %}
+            <span class="badge">身份：{{ nav_identities }}</span>
+          {% endif %}
+          {% if nav_roles %}
+            <span class="badge">角色：{{ nav_roles }}</span>
+          {% endif %}
+          <a href="{% url 'logout' %}">退出</a>
+        {% else %}
+          <a href="{% url 'login' %}">登录</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main>
+    {% if messages %}
+      {% for message in messages %}
+        <div class="card flash flash-{{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    (function () {
+      function buildCandidates(input) {
+        var listId = input.getAttribute("list");
+        if (!listId) return [];
+        var list = document.getElementById(listId);
+        if (!list) return [];
+        var options = Array.prototype.slice.call(list.querySelectorAll("option"));
+        var uniq = {};
+        var out = [];
+        options.forEach(function (opt) {
+          var v = (opt.value || "").trim();
+          if (!v || uniq[v]) return;
+          uniq[v] = true;
+          out.push({
+            text: v,
+            id: (opt.getAttribute("data-id") || "").trim(),
+          });
+        });
+        return out;
+      }
+
+      function attachSuggest(input) {
+        var candidates = buildCandidates(input);
+        if (!candidates.length) return;
+
+        var wrap = document.createElement("div");
+        wrap.className = "suggest-wrap";
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+
+        var panel = document.createElement("div");
+        panel.className = "suggest-panel";
+        panel.style.display = "none";
+        wrap.appendChild(panel);
+
+        var activeIndex = -1;
+        var visibleItems = [];
+
+        function hidePanel() {
+          panel.style.display = "none";
+          panel.innerHTML = "";
+          activeIndex = -1;
+          visibleItems = [];
+        }
+
+        function syncHiddenIfNeeded(idValue) {
+          var hiddenId = input.getAttribute("data-sync-hidden-id");
+          if (!hiddenId) return;
+          var hidden = document.getElementById(hiddenId);
+          if (!hidden) return;
+          hidden.value = idValue || "";
+        }
+
+        function chooseValue(item) {
+          input.value = item.text;
+          syncHiddenIfNeeded(item.id);
+          hidePanel();
+        }
+
+        function render() {
+          var q = (input.value || "").trim().toLowerCase();
+          var list = candidates.filter(function (item) {
+            return !q || item.text.toLowerCase().indexOf(q) >= 0;
+          }).slice(0, 20);
+
+          if (!list.length) {
+            hidePanel();
+            return;
+          }
+
+          panel.innerHTML = "";
+          visibleItems = list;
+          activeIndex = -1;
+          list.forEach(function (item, idx) {
+            var row = document.createElement("div");
+            row.className = "suggest-item";
+            row.textContent = item.text;
+            row.addEventListener("mousedown", function (e) {
+              e.preventDefault();
+              chooseValue(item);
+            });
+            panel.appendChild(row);
+          });
+          panel.style.display = "block";
+        }
+
+        function markActive() {
+          var items = panel.querySelectorAll(".suggest-item");
+          items.forEach(function (el, idx) {
+            if (idx === activeIndex) el.classList.add("active");
+            else el.classList.remove("active");
+          });
+        }
+
+        input.addEventListener("input", function () {
+          syncHiddenIfNeeded("");
+          render();
+        });
+        input.addEventListener("focus", render);
+        input.addEventListener("keydown", function (e) {
+          if (panel.style.display === "none") return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            activeIndex = Math.min(activeIndex + 1, visibleItems.length - 1);
+            markActive();
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            activeIndex = Math.max(activeIndex - 1, 0);
+            markActive();
+          } else if (e.key === "Enter" && activeIndex >= 0) {
+            e.preventDefault();
+            chooseValue(visibleItems[activeIndex]);
+          } else if (e.key === "Escape") {
+            hidePanel();
+          }
+        });
+
+        document.addEventListener("click", function (e) {
+          if (!wrap.contains(e.target)) hidePanel();
+        });
+      }
+
+      var inputs = document.querySelectorAll("input.js-user-suggest");
+      inputs.forEach(attachSuggest);
+    })();
+  </script>
+</body>
+</html>
