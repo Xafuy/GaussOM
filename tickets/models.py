@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from .fields import JSONTextField
+
 
 class TicketStage(models.TextChoices):
     """与需求文档一致的七个阶段（含 HCS 提单作为首阶段）"""
@@ -42,7 +44,7 @@ class Ticket(models.Model):
         verbose_name="当前处理人",
     )
     is_self_service = models.BooleanField("运维自提单", default=False)
-    extra_data = models.JSONField("阶段字段(JSON)", default=dict, blank=True)
+    extra_data = JSONTextField("阶段字段(JSON)", default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -4,6 +4,8 @@ from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
+import tickets.fields
+
 
 class Migration(migrations.Migration):
 
@@ -23,7 +25,7 @@ class Migration(migrations.Migration):
                 ('title', models.CharField(max_length=512, verbose_name='标题')),
                 ('description', models.TextField(blank=True, verbose_name='描述')),
                 ('is_self_service', models.BooleanField(default=False, verbose_name='运维自提单')),
-                ('extra_data', models.JSONField(blank=True, default=dict, verbose_name='阶段字段(JSON)')),
+                ('extra_data', tickets.fields.JSONTextField(blank=True, default=dict, verbose_name='阶段字段(JSON)')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('assignee', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_tickets', to=settings.AUTH_USER_MODEL, verbose_name='当前处理人')),

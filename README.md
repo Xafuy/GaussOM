@@ -32,6 +32,10 @@ python manage.py runserver
 
 访问：`http://127.0.0.1:8000/`
 
+### Windows 与 SQLite 说明
+
+旧版 Python 自带的 SQLite 可能未启用 JSON1，会导致 Django 的 `JSONField` 在 `migrate` 时报错。本项目工单 `extra_data` 已改为 [`JSONTextField`](tickets/fields.py)（TEXT 存 JSON），**无需 JSON1**。若你仍遇问题，请安装 **Python 3.10+**（官网安装包通常带较新 SQLite）。
+
 ## 当前已实现（MVP）
 
 - 运维单七阶段流程（HCS提单 -> 问题审核 -> 运维分析 -> 开发分析 -> 开发审核 -> 运维闭环 -> 问题审核关闭）
