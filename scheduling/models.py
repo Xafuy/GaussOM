@@ -177,3 +177,24 @@ class LeaveRequest(models.Model):
         verbose_name = "请假申请"
         verbose_name_plural = verbose_name
         ordering = ("-created_at",)
+
+
+class LeaveApproverConfig(models.Model):
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="leave_approver_configs",
+        verbose_name="审批人",
+    )
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("启用", default=True)
+    note = models.CharField("说明", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "请假审批人配置"
+        verbose_name_plural = verbose_name
+        ordering = ("sort_order", "id")
+        unique_together = ("approver",)
+
+    def __str__(self):
+        return "%s" % (self.approver.get_full_name() or self.approver.username)

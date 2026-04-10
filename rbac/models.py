@@ -62,12 +62,14 @@ class UserRole(models.Model):
 
 class StagePermissionRule(models.Model):
     STAGE_CHOICES = (
+        ("hcs_submit", "HCS提单"),
         ("issue_review", "问题审核"),
         ("ops_analysis", "运维人员分析"),
         ("dev_analysis", "开发人员分析"),
-        ("dev_review", "开发人员审核"),
+        ("dev_review", "开发人员闭环"),
         ("ops_closure", "运维人员闭环"),
         ("audit_close", "问题审核关闭"),
+        ("closed", "问题单关闭"),
     )
     stage = models.CharField("阶段", max_length=32, choices=STAGE_CHOICES, db_index=True)
     role = models.ForeignKey(

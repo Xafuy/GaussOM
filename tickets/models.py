@@ -5,15 +5,16 @@ from .fields import JSONTextField
 
 
 class TicketStage(models.TextChoices):
-    """与需求文档一致的七个阶段（含 HCS 提单作为首阶段）"""
+    """流程阶段（含终态问题单关闭）"""
 
     HCS_SUBMIT = "hcs_submit", "HCS提单"
     ISSUE_REVIEW = "issue_review", "问题审核"
     OPS_ANALYSIS = "ops_analysis", "运维人员分析"
     DEV_ANALYSIS = "dev_analysis", "开发人员分析"
-    DEV_REVIEW = "dev_review", "开发人员审核"
+    DEV_REVIEW = "dev_review", "开发人员闭环"
     OPS_CLOSURE = "ops_closure", "运维人员闭环"
     AUDIT_CLOSE = "audit_close", "问题审核关闭"
+    CLOSED = "closed", "问题单关闭"
 
 
 class Ticket(models.Model):
@@ -98,3 +99,38 @@ class TicketTransitionLog(models.Model):
         verbose_name = "阶段变更记录"
         verbose_name_plural = verbose_name
         ordering = ("-created_at",)
+
+
+class ModuleArea(models.Model):
+    name = models.CharField("一级模块", max_length=64, unique=True)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("启用", default=True)
+
+    class Meta:
+        verbose_name = "问题模块一级"
+        verbose_name_plural = verbose_name
+        ordering = ("sort_order", "id")
+
+    def __str__(self):
+        return self.name
+
+
+class ModuleSubArea(models.Model):
+    area = models.ForeignKey(
+        ModuleArea,
+        on_delete=models.CASCADE,
+        related_name="sub_areas",
+        verbose_name="一级模块",
+    )
+    name = models.CharField("二级模块", max_length=64)
+    sort_order = models.PositiveIntegerField("排序", default=0)
+    is_active = models.BooleanField("启用", default=True)
+
+    class Meta:
+        verbose_name = "问题模块二级"
+        verbose_name_plural = verbose_name
+        ordering = ("area__sort_order", "sort_order", "id")
+        unique_together = ("area", "name")
+
+    def __str__(self):
+        return "%s / %s" % (self.area.name, self.name)

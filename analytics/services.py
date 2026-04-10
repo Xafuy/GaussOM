@@ -46,11 +46,11 @@ def _field_from_ticket(ticket, keys):
 def overview_metrics(start_dt, end_dt):
     qs = Ticket.objects.filter(created_at__gte=start_dt, created_at__lte=end_dt)
     total = qs.count()
-    closed = qs.filter(stage=TicketStage.AUDIT_CLOSE).count()
+    closed = qs.filter(stage=TicketStage.CLOSED).count()
     close_rate = round((closed * 100.0 / total), 2) if total else 0
     close_logs = (
         TicketTransitionLog.objects.filter(
-            ticket__in=qs, to_stage=TicketStage.AUDIT_CLOSE
+            ticket__in=qs, to_stage=TicketStage.CLOSED
         )
         .order_by("ticket_id", "-created_at")
         .select_related("ticket")
@@ -101,6 +101,29 @@ def manpower_metrics(start_dt, end_dt):
         "by_assignee": [{"name": k, "value": v} for k, v in sorted(by_assignee.items(), key=lambda x: x[1], reverse=True)],
         "by_operator": by_operator[:20],
     }
+
+
+def collaboration_metrics(start_dt, end_dt):
+    """
+    协助口径：
+    - 基于流转日志 operator 统计“协助过的工单数”（去重 ticket_id）
+    - 排除仅创建动作（from_stage 为空）对协助次数的干扰
+    """
+    logs = TicketTransitionLog.objects.filter(
+        created_at__gte=start_dt, created_at__lte=end_dt
+    ).exclude(from_stage="")
+    pairs = set()
+    for lg in logs.values("operator__username", "ticket_id"):
+        username = lg["operator__username"] or "未知"
+        pairs.add((username, lg["ticket_id"]))
+    counter = {}
+    for username, _ in pairs:
+        counter[username] = counter.get(username, 0) + 1
+    top = [
+        {"name": k, "value": v}
+        for k, v in sorted(counter.items(), key=lambda x: x[1], reverse=True)[:20]
+    ]
+    return {"by_operator_distinct_tickets": top}
 
 
 def ownership_metrics(start_dt, end_dt):

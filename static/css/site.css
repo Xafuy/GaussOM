@@ -187,6 +187,51 @@ th {
   font: inherit;
 }
 
+/* 工单详情：短字段多列排布，减少纵向长度 */
+.detail-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px 18px;
+  align-items: start;
+  margin-bottom: 4px;
+}
+.detail-fields-grid .form-group {
+  margin-bottom: 0;
+}
+.detail-fields-grid .form-group input[type="text"],
+.detail-fields-grid .form-group input[type="date"],
+.detail-fields-grid .form-group select,
+.detail-fields-grid .form-group textarea {
+  max-width: 100%;
+}
+.detail-fields-grid .form-group-span-full {
+  grid-column: 1 / -1;
+}
+.detail-fields-grid .suggest-wrap {
+  max-width: 100%;
+}
+.detail-fields-grid .inline-form {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.detail-fields-grid .inline-form select {
+  min-width: 0;
+  flex: 1 1 160px;
+  max-width: 100%;
+}
+.detail-fields-flow {
+  margin: 14px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.detail-fields-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
 .required-star {
   color: #d93025;
   font-weight: 700;
@@ -327,4 +372,31 @@ th {
 .chart {
   width: 100%;
   height: 300px;
+}
+
+.stage-timeline {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+}
+
+.timeline-node {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+
+.timeline-done {
+  background: rgba(46, 125, 50, 0.12);
+}
+
+.timeline-current {
+  background: rgba(0, 113, 227, 0.12);
+  font-weight: 600;
+}
+
+.timeline-todo {
+  background: rgba(0, 0, 0, 0.03);
 }

@@ -139,6 +139,59 @@
 </div>
 
 <div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">值班人请假</h2>
+  {% if can_apply_leave %}
+  <p class="meta" style="margin:0 0 10px;">填写请假类型、时间与审批人后提交；审批仍在下方「待审批请假」中处理。</p>
+  <a href="{% url 'leave_request' %}" class="btn">填写请假申请</a>
+  {% else %}
+  <p class="meta">当前账号不在轮值表或值班排班中，无法使用请假入口。</p>
+  {% endif %}
+</div>
+
+{% if can_edit_schedule %}
+<div class="card">
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">待审批请假（管理员）</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>申请人</th>
+          <th>指定审批人</th>
+          <th>类型</th>
+          <th>开始</th>
+          <th>结束</th>
+          <th>理由</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lv in pending_leaves %}
+        <tr>
+          <td>{{ lv.applicant.get_full_name|default:lv.applicant.username }}</td>
+          <td>{% if lv.approver %}{{ lv.approver.get_full_name|default:lv.approver.username }}{% else %}-{% endif %}</td>
+          <td>{{ lv.leave_type }}</td>
+          <td>{{ lv.start_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ lv.end_at|date:"Y-m-d H:i" }}</td>
+          <td>{{ lv.reason|default:"-" }}</td>
+          <td>
+            <form method="post" class="inline-form" style="margin:0;">
+              {% csrf_token %}
+              <input type="hidden" name="leave_id" value="{{ lv.id }}">
+              <button type="submit" class="btn" name="action" value="leave_approve">通过</button>
+              <button type="submit" class="btn btn-secondary" name="action" value="leave_reject">驳回</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="meta">暂无待审批请假</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
   <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">已审批请假（最近20条）</h2>
   <div class="table-wrap">
     <table>

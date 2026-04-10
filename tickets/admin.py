@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Ticket, TicketTransitionLog
+from .models import ModuleArea, ModuleSubArea, Ticket, TicketTransitionLog
 
 
 class TicketTransitionLogInline(admin.TabularInline):
@@ -27,3 +27,18 @@ class TicketAdmin(admin.ModelAdmin):
 class TicketTransitionLogAdmin(admin.ModelAdmin):
     list_display = ("ticket", "from_stage", "to_stage", "operator", "created_at")
     list_filter = ("to_stage",)
+
+
+@admin.register(ModuleArea)
+class ModuleAreaAdmin(admin.ModelAdmin):
+    list_display = ("name", "sort_order", "is_active")
+    list_editable = ("sort_order", "is_active")
+    search_fields = ("name",)
+
+
+@admin.register(ModuleSubArea)
+class ModuleSubAreaAdmin(admin.ModelAdmin):
+    list_display = ("name", "area", "sort_order", "is_active")
+    list_filter = ("area", "is_active")
+    list_editable = ("sort_order", "is_active")
+    search_fields = ("name", "area__name")

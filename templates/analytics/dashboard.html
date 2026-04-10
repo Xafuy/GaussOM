@@ -25,6 +25,7 @@
 <div class="chart-grid">
   <div class="card"><h2 class="compact-title">人力投入（按处理人）</h2><div id="chart_assignee" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">人力投入（按操作人）</h2><div id="chart_operator" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">协助工单（按协助人）</h2><div id="chart_collab" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">问题归属（模块）</h2><div id="chart_module" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">问题归属（严重性）</h2><div id="chart_severity" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">透传分析（阶段流转）</h2><div id="chart_flow" class="chart"></div></div>
@@ -73,6 +74,7 @@
     }
     bar("chart_assignee", data.manpower.by_assignee, "工单数");
     bar("chart_operator", data.manpower.by_operator, "操作次数");
+    bar("chart_collab", data.collaboration.by_operator_distinct_tickets, "协助工单数");
     bar("chart_module", data.ownership.module, "工单数");
     pie("chart_severity", data.ownership.severity);
     bar("chart_flow", data.flow.transitions, "次数");
@@ -80,7 +82,7 @@
     line("chart_sla", data.sla.x, { "新增工单": data.sla.total, "超时工单": data.sla.overdue });
     pie("chart_daynight", data.schedule.day_night);
     window.addEventListener("resize", function () {
-      ["chart_assignee","chart_operator","chart_module","chart_severity","chart_flow","chart_dwell","chart_sla","chart_daynight"].forEach(function(id){
+      ["chart_assignee","chart_operator","chart_collab","chart_module","chart_severity","chart_flow","chart_dwell","chart_sla","chart_daynight"].forEach(function(id){
         var inst = echarts.getInstanceByDom(document.getElementById(id));
         if (inst) inst.resize();
       });

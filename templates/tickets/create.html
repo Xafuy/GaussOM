@@ -57,8 +57,19 @@
     <div class="form-group">
       <label>
         <input type="checkbox" name="is_self_service" value="1">
-        运维自提单（直接进入「运维人员分析」，当前处理人设为自己）
+        运维自提单（直接进入「运维人员分析」，由值班系统自动分配处理人）
       </label>
+    </div>
+    <div class="form-group">
+      <label for="review_assignee_id">问题审核处理人（非自提单必选）</label>
+      <select id="review_assignee_id" name="review_assignee_id">
+        <option value="">请选择</option>
+        {% for u in issue_review_users %}
+          <option value="{{ u.id }}" {% if review_assignee_id == u.id|stringformat:'s' %}selected{% endif %}>
+            {{ u.get_full_name|default:u.username }}（{{ u.username }}）
+          </option>
+        {% endfor %}
+      </select>
     </div>
     <button type="submit" class="btn">提交</button>
     <a href="{% url 'ticket_list' %}" class="btn btn-secondary">取消</a>

@@ -11,12 +11,19 @@ from scheduling.models import (
     DutyAssignment,
     DutySheet,
     IdentityRouteRule,
+    LeaveApproverConfig,
     LeaveRequest,
     OnCallStatus,
     RotaMember,
     RotaTable,
 )
-from tickets.models import Ticket, TicketStage, TicketTransitionLog
+from tickets.models import (
+    ModuleArea,
+    ModuleSubArea,
+    Ticket,
+    TicketStage,
+    TicketTransitionLog,
+)
 from tickets.stage_fields import get_field_defs_for_stage
 
 
@@ -39,6 +46,8 @@ class Command(BaseCommand):
             users = self._bootstrap_users()
             self._bootstrap_roles(users)
             self._bootstrap_schedule(users)
+            self._bootstrap_leave_approvers(users)
+            self._bootstrap_modules()
             self._bootstrap_tickets(users)
 
         self.stdout.write(self.style.SUCCESS("bootstrap_gaussdbom 完成。"))
@@ -47,21 +56,57 @@ class Command(BaseCommand):
         self.stdout.write(
             "演示账号：demo_creator, demo_ops_a, demo_ops_b, demo_dev, demo_bu ... 密码均为 Demo@123456"
         )
-        self.stdout.write("（多名演示用户为 staff，可进 /admin/）")
+        self.stdout.write("（仅 demo_ops_a 为 staff，可进 /admin/）")
         self.stdout.write("工单：OM-DEMO-0001 … 0006")
+        self.stdout.write("问题模块：已预置一级/二级模块示例数据")
+        self.stdout.write("请假审批人：已预置可选审批人配置")
+
+    def _bootstrap_leave_approvers(self, users):
+        specs = [
+            ("demo_ops_a", 0, "默认运维审批人"),
+            ("demo_ops_b", 1, "默认管控审批人"),
+        ]
+        for username, sort_order, note in specs:
+            user = users.get(username)
+            if not user:
+                continue
+            LeaveApproverConfig.objects.update_or_create(
+                approver=user,
+                defaults={"sort_order": sort_order, "is_active": True, "note": note},
+            )
+
+    def _bootstrap_modules(self):
+        module_map = {
+            "内核": ["事务", "执行器", "优化器", "存储引擎", "连接管理"],
+            "管理平台": ["控制台", "告警中心", "工单中心"],
+            "数据同步": ["CDC", "复制链路", "校验任务"],
+            "备份恢复": ["全量备份", "增量备份", "恢复任务"],
+            "安全合规": ["权限控制", "审计日志", "加密能力"],
+        }
+        for idx, (area_name, sub_names) in enumerate(module_map.items()):
+            area, _ = ModuleArea.objects.update_or_create(
+                name=area_name,
+                defaults={"sort_order": idx, "is_active": True},
+            )
+            for sidx, sub_name in enumerate(sub_names):
+                ModuleSubArea.objects.update_or_create(
+                    area=area,
+                    name=sub_name,
+                    defaults={"sort_order": sidx, "is_active": True},
+                )
 
     def _bootstrap_users(self):
         User = get_user_model()
         user_specs = [
-            ("demo_creator", False, "访客", "张三"),
+            ("demo_creator", False, "BU", "张三"),
             ("demo_ops_a", True, "运维", "李炜"),
-            ("demo_ops_b", True, "管控", "季超"),
-            ("demo_dev", True, "开发", "刘强"),
-            ("demo_bu", True, "BU", "任方博"),
-            ("demo_ops_c", True, "运维", "娄静"),
-            ("demo_ops_d", True, "运维", "张傲"),
-            ("demo_control_b", True, "管控", "于子翔"),
-            ("demo_dev_b", True, "开发", "崔乐然"),
+            ("demo_ops_b", False, "管控", "季超"),
+            ("demo_dev", False, "开发", "刘强"),
+            ("demo_bu", False, "BU", "任方博"),
+            ("demo_ops_c", False, "运维", "娄静"),
+            ("demo_ops_d", False, "运维", "张傲"),
+            ("demo_control_b", False, "管控", "于子翔"),
+            ("demo_dev_b", False, "开发", "崔乐然"),
         ]
         out = {}
         identity_map = {"访客": "guest", "运维": "ops", "开发": "dev", "管控": "control", "BU": "bu"}
@@ -87,7 +132,7 @@ class Command(BaseCommand):
 
     def _bootstrap_roles(self, users):
         mapping = {
-            "demo_creator": "guest",
+            "demo_creator": "bu",
             "demo_ops_a": "ops",
             "demo_ops_b": "control",
             "demo_dev": "dev",
@@ -107,7 +152,7 @@ class Command(BaseCommand):
             slug="day-default",
             defaults={"name": "白班默认轮值", "is_active": True},
         )
-        for idx, uname in enumerate(["demo_ops_a", "demo_ops_c", "demo_ops_d", "demo_dev"]):
+        for idx, uname in enumerate(["demo_ops_a", "demo_ops_c", "demo_ops_d"]):
             RotaMember.objects.update_or_create(
                 rota=rota,
                 user=users[uname],
@@ -150,7 +195,7 @@ class Command(BaseCommand):
                 )
             DutyAssignment.objects.get_or_create(sheet=bu_duty, date=d, user=users["demo_ops_a"])
             DutyAssignment.objects.get_or_create(
-                sheet=control_duty, date=d, user=users["demo_ops_b"]
+                sheet=control_duty, date=d, user=users["demo_ops_c"]
             )
             DutyAssignment.objects.get_or_create(sheet=kernel_duty, date=d, user=users["demo_ops_d"])
 
@@ -163,24 +208,28 @@ class Command(BaseCommand):
                 "active_ticket_count": 0,
             },
         )
-        RotaMember.objects.get_or_create(
+        RotaMember.objects.update_or_create(
             rota=control_rota,
-            user=users["demo_ops_b"],
+            user=users["demo_ops_d"],
             defaults={
                 "sort_order": 0,
                 "status": OnCallStatus.ONLINE,
                 "active_ticket_count": 0,
             },
         )
+        RotaMember.objects.filter(
+            rota=control_rota, user=users["demo_ops_b"]
+        ).delete()
         public_rota, _ = RotaTable.objects.get_or_create(
             slug="day-public",
             defaults={"name": "公有云白班轮值", "is_active": True},
         )
-        RotaMember.objects.get_or_create(
+        RotaMember.objects.update_or_create(
             rota=public_rota,
-            user=users["demo_bu"],
+            user=users["demo_ops_c"],
             defaults={"sort_order": 0, "status": OnCallStatus.ONLINE, "active_ticket_count": 0},
         )
+        RotaMember.objects.filter(rota=public_rota, user=users["demo_bu"]).delete()
 
         IdentityRouteRule.objects.update_or_create(
             identity=IdentityRouteRule.Identity.BU,
@@ -261,7 +310,9 @@ class Command(BaseCommand):
             },
         )
         _set_stage_values(
-            t1, TicketStage.ISSUE_REVIEW, {"issue_type_prejudge": "咨询类", "disposition": "确认问题"}
+            t1,
+            TicketStage.ISSUE_REVIEW,
+            {"issue_type_prejudge": "咨询类", "disposition": "进入运维人员分析（值班系统分单）"},
         )
         Ticket.objects.filter(pk=t1.pk).update(created_at=now - timedelta(days=6), updated_at=now - timedelta(days=6))
         TicketTransitionLog.objects.create(
@@ -389,7 +440,7 @@ class Command(BaseCommand):
             description="闭环示例",
             reporter=creator,
             assignee=ops_a,
-            stage=TicketStage.AUDIT_CLOSE,
+            stage=TicketStage.CLOSED,
         )
         _set_stage_values(
             t6,
@@ -403,6 +454,13 @@ class Command(BaseCommand):
             to_stage=TicketStage.AUDIT_CLOSE,
             operator=ops_a,
             note="seed: 已审核关闭",
+        )
+        TicketTransitionLog.objects.create(
+            ticket=t6,
+            from_stage=TicketStage.AUDIT_CLOSE,
+            to_stage=TicketStage.CLOSED,
+            operator=ops_a,
+            note="seed: 问题解决关闭",
         )
 
         # 避免 stage_fields 结构为空，补齐每个工单当前阶段字段框架（便于展示）

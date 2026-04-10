@@ -13,53 +13,25 @@
     </div>
   </div>
   <p class="meta ticket-meta">提单人：{{ ticket.reporter.get_full_name|default:ticket.reporter.username }} · 当前处理人：{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% else %}未分配{% endif %}</p>
+  <div class="stage-timeline">
+    {% for node in stage_timeline %}
+      <span class="timeline-node timeline-{{ node.status }}">{{ node.label }}</span>
+    {% endfor %}
+  </div>
   {% if ticket.description %}
   <p style="white-space:pre-wrap">{{ ticket.description }}</p>
   {% endif %}
-  <hr class="section-divider">
-  <div class="ticket-actions">
-    {% if next_stage and can_advance %}
-    <form method="post" class="inline-form">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="advance">
-      <button type="submit" class="btn">推进到下一阶段：{{ next_stage_label }}</button>
-    </form>
-    {% endif %}
-
-    {% if can_transfer %}
-    <form method="post" class="inline-form">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="transfer">
-      <input
-        type="text"
-        name="assignee_query"
-        list="assignee_candidates"
-        class="js-user-suggest"
-        data-sync-hidden-id="assignee_id_hidden"
-        placeholder="搜索处理人（姓名/账号）"
-        autocomplete="off"
-      >
-      <input type="hidden" name="assignee_id" id="assignee_id_hidden" value="{% if ticket.assignee %}{{ ticket.assignee.id }}{% endif %}">
-      <datalist id="assignee_candidates">
-        {% for u in active_users %}
-          <option value="{{ u.get_full_name|default:u.username }}（{{ u.username }}）" data-id="{{ u.id }}"></option>
-        {% endfor %}
-      </datalist>
-      <button type="submit" class="btn btn-secondary">转派</button>
-    </form>
-    {% endif %}
-  </div>
 </div>
 
 {% if stage_field_defs %}
 <div class="card">
-  <h2 class="compact-title">阶段字段</h2>
+  <h2 class="compact-title">详细信息</h2>
   {% if can_edit_fields %}
   <form method="post">
     {% csrf_token %}
-    <input type="hidden" name="action" value="update_fields">
+    <div class="detail-fields-grid">
     {% for row in stage_form_rows %}
-      <div class="form-group">
+      <div class="form-group{% if row.widget == 'textarea' or row.widget == 'user_multi_select' or row.widget == 'module_cascade' %} form-group-span-full{% endif %}">
         <label for="fld_{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required-star">*</span>{% endif %}</label>
         {% if row.widget == "textarea" %}
         <textarea id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>{{ row.value }}</textarea>
@@ -90,15 +62,225 @@
             <option value="{{ u.username }}"></option>
           {% endfor %}
         </datalist>
+        {% elif row.widget == "user_multi_select" %}
+        <select id="fld_{{ row.key }}" name="{{ row.key }}" multiple size="6"{% if row.required %} required{% endif %}>
+          {% for u in active_users %}
+            {% with uname=u.username full=u.get_full_name|default:u.username %}
+            <option value="{{ uname }}" {% if uname in row.selected_values or full in row.selected_values %}selected{% endif %}>
+              {{ full }}（{{ uname }}）
+            </option>
+            {% endwith %}
+          {% endfor %}
+        </select>
+        <p class="meta">可按 Ctrl/Cmd 多选</p>
+        {% elif row.widget == "module_cascade" %}
+        <input type="hidden" id="fld_{{ row.key }}" name="{{ row.key }}" value="{{ row.value }}">
+        <div class="inline-form">
+          <select id="fld_{{ row.key }}__l1" name="{{ row.key }}__l1"{% if row.required %} required{% endif %}></select>
+          <select id="fld_{{ row.key }}__l2" name="{{ row.key }}__l2"{% if row.required %} required{% endif %}></select>
+        </div>
         {% else %}
         <input id="fld_{{ row.key }}" name="{{ row.key }}" type="text" value="{{ row.value }}"{% if row.required %} required{% endif %}>
         {% endif %}
       </div>
     {% endfor %}
-    <button type="submit" class="btn">保存阶段字段</button>
+    </div>
+    {% if advance_options and can_advance %}
+    <div class="detail-fields-flow ticket-actions">
+      <label for="advance_choice">处理方式</label>
+      <select id="advance_choice" name="advance_choice">
+        <option value="">请选择</option>
+        {% for opt in advance_options %}
+          <option value="{{ opt.value }}">{{ opt.label }}</option>
+        {% endfor %}
+      </select>
+      <span id="next-assignee-wrap">
+        <label for="next_assignee_id">下一处理人</label>
+        <select id="next_assignee_id" name="next_assignee_id">
+          <option value="">请先选择处理方式</option>
+        </select>
+      </span>
+    </div>
+    {% endif %}
+    <div class="detail-fields-buttons">
+    {% if advance_options and can_advance %}
+    <button type="submit" class="btn" name="action" value="advance">保存并确认流转</button>
+    {% endif %}
+    <button type="submit" class="btn{% if advance_options and can_advance %} btn-secondary{% endif %}" name="action" value="update_fields">保存详细信息</button>
+    </div>
   </form>
+  {% if advance_options and can_advance %}
+  {{ advance_flow_payload|json_script:"advance-flow-data" }}
+  <script>
+  (function () {
+    var raw = document.getElementById("advance-flow-data");
+    if (!raw) return;
+    var items = JSON.parse(raw.textContent || "[]");
+    var map = {};
+    for (var i = 0; i < items.length; i++) {
+      map[items[i].value] = items[i];
+    }
+    var choice = document.getElementById("advance_choice");
+    var sel = document.getElementById("next_assignee_id");
+    var wrap = document.getElementById("next-assignee-wrap");
+    if (!choice || !sel || !wrap) return;
+    function refresh() {
+      var key = choice.value;
+      var cfg = map[key];
+      sel.innerHTML = "";
+      if (!cfg) {
+        sel.required = false;
+        sel.disabled = true;
+        var o0 = document.createElement("option");
+        o0.value = "";
+        o0.textContent = "请先选择处理方式";
+        sel.appendChild(o0);
+        return;
+      }
+      if (cfg.is_close) {
+        wrap.style.display = "none";
+        sel.required = false;
+        sel.disabled = true;
+        var oc = document.createElement("option");
+        oc.value = "";
+        oc.textContent = "关单无需指定";
+        sel.appendChild(oc);
+        return;
+      }
+      if (cfg.is_auto_assign) {
+        wrap.style.display = "none";
+        sel.required = false;
+        sel.disabled = true;
+        var oa = document.createElement("option");
+        oa.value = "";
+        oa.textContent = "该流转将由值班系统自动分配";
+        sel.appendChild(oa);
+        return;
+      }
+      wrap.style.display = "";
+      sel.disabled = false;
+      sel.required = true;
+      var ph = document.createElement("option");
+      ph.value = "";
+      ph.textContent = "请选择";
+      sel.appendChild(ph);
+      var list = cfg.assignees || [];
+      for (var j = 0; j < list.length; j++) {
+        var u = list[j];
+        var opt = document.createElement("option");
+        opt.value = String(u.id);
+        opt.textContent = u.label;
+        sel.appendChild(opt);
+      }
+    }
+    choice.addEventListener("change", refresh);
+    refresh();
+  })();
+  </script>
+  {% endif %}
+  {{ module_tree|json_script:"module-tree-data" }}
+  <script>
+  (function () {
+    var raw = document.getElementById("module-tree-data");
+    if (!raw) return;
+    var tree = JSON.parse(raw.textContent || "[]");
+    function bindCascade(hidden) {
+      var key = hidden.id.replace("fld_", "");
+      var sel1 = document.getElementById("fld_" + key + "__l1");
+      var sel2 = document.getElementById("fld_" + key + "__l2");
+      if (!sel1 || !sel2) return;
+      var cur = (hidden.value || "").split("/");
+      var cur1 = (cur[0] || "").trim();
+      var cur2 = (cur[1] || "").trim();
+      function fillL1() {
+        sel1.innerHTML = "";
+        var p = document.createElement("option");
+        p.value = "";
+        p.textContent = "请选择一级模块";
+        sel1.appendChild(p);
+        tree.forEach(function (a) {
+          var o = document.createElement("option");
+          o.value = a.name;
+          o.textContent = a.name;
+          if (a.name === cur1) o.selected = true;
+          sel1.appendChild(o);
+        });
+      }
+      function fillL2() {
+        sel2.innerHTML = "";
+        var p = document.createElement("option");
+        p.value = "";
+        p.textContent = "请选择二级模块";
+        sel2.appendChild(p);
+        var a = tree.find(function (x) { return x.name === sel1.value; });
+        (a && a.children || []).forEach(function (c) {
+          var o = document.createElement("option");
+          o.value = c.name;
+          o.textContent = c.name;
+          if (sel1.value === cur1 && c.name === cur2) o.selected = true;
+          sel2.appendChild(o);
+        });
+      }
+      function syncHidden() {
+        if (sel1.value && sel2.value) hidden.value = sel1.value + "/" + sel2.value;
+        else hidden.value = "";
+      }
+      fillL1();
+      fillL2();
+      syncHidden();
+      sel1.addEventListener("change", function () { cur2 = ""; fillL2(); syncHidden(); });
+      sel2.addEventListener("change", syncHidden);
+    }
+    document.querySelectorAll("input[type='hidden'][id^='fld_']").forEach(function (el) {
+      if (document.getElementById(el.id + "__l1")) bindCascade(el);
+    });
+  })();
+  </script>
   {% else %}
-    <p class="meta">你没有字段编辑权限（需要 `ticket:edit_fields`）。</p>
+    <p class="meta">你没有当前阶段详细信息编辑权限。</p>
+  {% endif %}
+  {% if prev_stage and can_rollback or can_revoke or can_transfer %}
+  <hr class="section-divider">
+  <p class="meta" style="margin:0 0 8px;">其他操作</p>
+  <div class="ticket-actions">
+    {% if prev_stage and can_rollback %}
+    <form method="post" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="rollback">
+      <input type="text" name="rollback_reason" placeholder="回退原因（可选）">
+      <button type="submit" class="btn btn-secondary">回退到上一阶段：{{ prev_stage_label }}</button>
+    </form>
+    {% endif %}
+    {% if can_revoke %}
+    <form method="post" class="inline-form" onsubmit="return confirm('确认撤销该运维单？');">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="revoke">
+      <button type="submit" class="btn btn-secondary">撤销运维单</button>
+    </form>
+    {% endif %}
+    {% if can_transfer %}
+    <form method="post" class="inline-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="transfer">
+      <input
+        type="text"
+        name="assignee_query"
+        list="assignee_candidates"
+        class="js-user-suggest"
+        data-sync-hidden-id="assignee_id_hidden"
+        placeholder="搜索处理人（姓名/账号）"
+        autocomplete="off"
+      >
+      <input type="hidden" name="assignee_id" id="assignee_id_hidden" value="{% if ticket.assignee %}{{ ticket.assignee.id }}{% endif %}">
+      <datalist id="assignee_candidates">
+        {% for u in active_users %}
+          <option value="{{ u.get_full_name|default:u.username }}（{{ u.username }}）" data-id="{{ u.id }}"></option>
+        {% endfor %}
+      </datalist>
+      <button type="submit" class="btn btn-secondary">转派</button>
+    </form>
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 {% endif %}
@@ -115,7 +297,7 @@
 </div>
 
 <div class="card">
-  <h2 class="compact-title">各阶段已填数据</h2>
+  <h2 class="compact-title">各阶段详细信息</h2>
   <div class="toolbar">
     <a href="?snapshot=key" class="btn {% if snapshot_mode != 'key' %}btn-secondary{% endif %}">关键字段</a>
     <a href="?snapshot=all" class="btn {% if snapshot_mode != 'all' %}btn-secondary{% endif %}">全部字段</a>
@@ -142,7 +324,7 @@
       </div>
     {% endfor %}
   {% else %}
-    <p class="meta">暂无阶段字段数据</p>
+    <p class="meta">暂无详细信息</p>
   {% endif %}
 </div>
 {% endblock %}

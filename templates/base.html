@@ -22,8 +22,8 @@
             <a href="/admin/">管理</a>
           {% endif %}
           <span class="meta">{{ user.get_full_name|default:user.username }}</span>
-          {% if nav_identities %}
-            <span class="badge">身份：{{ nav_identities }}</span>
+          {% if nav_user_level %}
+            <span class="badge">{{ nav_user_level }}</span>
           {% endif %}
           {% if nav_roles %}
             <span class="badge">角色：{{ nav_roles }}</span>
