@@ -3,16 +3,16 @@
 {% block content %}
 <div class="card">
   <h1>值班管理</h1>
-  <p class="subtitle">展示多轮值表/多值班表、今日值班、请假与按提单人身份的分单路由策略。</p>
+  <p class="subtitle">展示多轮值表/多值班表、今日值班、请假与按提单人角色的分单路由策略。</p>
 </div>
 
 <div class="card">
-  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">提单人身份路由（配置生效）</h2>
+  <h2 style="font-size:19px;font-weight:600;margin:0 0 12px;">提单人角色路由（配置生效）</h2>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>提单人身份</th>
+          <th>提单人角色</th>
           <th>时间窗口</th>
           <th>轮值表</th>
           <th>值班表</th>
@@ -22,14 +22,14 @@
       <tbody>
         {% for r in route_rules %}
         <tr>
-          <td>{{ r.identity }}</td>
+          <td>{{ r.role.name }}（{{ r.role.slug }}）</td>
           <td>{{ r.get_time_window_display }}</td>
           <td>{% if r.rota_table %}{{ r.rota_table.name }}{% else %}-{% endif %}</td>
           <td>{% if r.duty_sheet %}{{ r.duty_sheet.name }}{% else %}-{% endif %}</td>
           <td>{{ r.priority }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="meta">暂无生效路由规则，请到后台配置“身份分单路由规则”。</td></tr>
+        <tr><td colspan="5" class="meta">暂无生效路由规则，请到后台配置“角色分单路由规则”。</td></tr>
         {% endfor %}
       </tbody>
     </table>

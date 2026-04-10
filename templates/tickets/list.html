@@ -6,7 +6,7 @@
   <div class="toolbar">
     <a href="{% url 'ticket_list' %}?view=mine" class="btn {% if view_mode != 'mine' %}btn-secondary{% endif %}">我的待处理</a>
     <a href="{% url 'ticket_list' %}?view=created" class="btn {% if view_mode != 'created' %}btn-secondary{% endif %}">我创建的</a>
-    <a href="{% url 'ticket_list' %}?view=assisted" class="btn {% if view_mode != 'assisted' %}btn-secondary{% endif %}">我协助的</a>
+    <a href="{% url 'ticket_list' %}?view=assisted" class="btn {% if view_mode != 'assisted' %}btn-secondary{% endif %}">我参与过的</a>
     <a href="{% url 'ticket_list' %}?view=all" class="btn {% if view_mode != 'all' %}btn-secondary{% endif %}">全部</a>
     {% if can_create_ticket %}
     <a href="{% url 'ticket_create' %}" class="btn">新建</a>

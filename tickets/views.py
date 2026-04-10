@@ -1,8 +1,13 @@
+import os
+import uuid
+
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -238,6 +243,7 @@ def ticket_detail(request, pk):
             {
                 "key": fd["key"],
                 "label": fd["label"],
+                "group": _field_group(fd["key"], fd.get("widget", "text")),
                 "widget": fd.get("widget", "text"),
                 "required": _is_field_required(fd, all_values),
                 "options": fd.get("options", []),
@@ -260,6 +266,7 @@ def ticket_detail(request, pk):
             "stages": TicketStage.choices,
             "advance_options": advance_options,
             "advance_flow_payload": advance_flow_payload,
+            "next_path_labels": [o["label"] for o in advance_options],
             "prev_stage": prev_stage,
             "prev_stage_label": prev_stage_label,
             "active_users": users,
@@ -287,6 +294,32 @@ def ticket_detail(request, pk):
             "stage_timeline": stage_timeline,
         },
     )
+
+
+@login_required
+def ticket_upload_image(request, pk):
+    ticket = get_object_or_404(Ticket, pk=pk)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "仅支持 POST"}, status=405)
+    if not (
+        _can_operate_ticket(request.user, ticket) and can_handle_stage(request.user, ticket.stage)
+    ):
+        return JsonResponse({"ok": False, "error": "无权限上传图片"}, status=403)
+    img = request.FILES.get("image")
+    if not img:
+        return JsonResponse({"ok": False, "error": "未检测到图片"}, status=400)
+    content_type = getattr(img, "content_type", "") or ""
+    if not content_type.startswith("image/"):
+        return JsonResponse({"ok": False, "error": "仅支持图片文件"}, status=400)
+    if img.size > 10 * 1024 * 1024:
+        return JsonResponse({"ok": False, "error": "图片大小不能超过 10MB"}, status=400)
+    ext = os.path.splitext(img.name or "")[1].lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
+        ext = ".png"
+    folder = timezone.now().strftime("ticket-images/%Y%m")
+    rel_path = "%s/%s%s" % (folder, uuid.uuid4().hex, ext)
+    saved = default_storage.save(rel_path, img)
+    return JsonResponse({"ok": True, "url": default_storage.url(saved)})
 
 
 def _hcs_field_defs_for_create(submit_source="hcs"):
@@ -434,7 +467,7 @@ def ticket_create(request):
         ops_assignee = None
         if is_self:
             ops_assignee, assign_note = pick_assignee(
-                identities=_ticket_user_identities(request.user)
+                role_slugs=_ticket_user_roles(request.user)
             )
             if not ops_assignee:
                 return render(
@@ -698,7 +731,7 @@ def _advance_ticket(ticket, operator, advance_choice="", next_assignee_id=None):
     auto_assign_note = ""
     if _should_duty_pick_for_ops(from_stage, next_stage):
         next_user, auto_assign_note = pick_assignee(
-            identities=_ticket_user_identities(ticket.reporter)
+            role_slugs=_ticket_user_roles(ticket.reporter)
         )
         if not next_user:
             return False, "值班系统暂无可派运维人员：%s" % auto_assign_note
@@ -995,6 +1028,15 @@ def _inherit_common_fields(ticket, from_stage, to_stage):
 
 def _stage_snapshots(ticket, key_only=True):
     stage_fields = (ticket.extra_data or {}).get("stage_fields", {})
+    # 先聚合全流程字段标签，避免“跨阶段继承字段”在快照里回退为英文 key。
+    global_label_map = {}
+    for stg, _ in TicketStage.choices:
+        for fd in get_field_defs_for_stage(
+            stg, context={"submit_source": _get_submit_source(ticket)}
+        ):
+            k = fd.get("key")
+            if k and fd.get("label"):
+                global_label_map[k] = fd.get("label")
     snapshots = []
     for stage, label in TicketStage.choices:
         values = stage_fields.get(stage, {})
@@ -1023,7 +1065,9 @@ def _stage_snapshots(ticket, key_only=True):
                 "external_reply",
             }:
                 continue
-            rows.append({"label": label_map.get(k, k), "value": v})
+            rows.append(
+                {"label": label_map.get(k) or global_label_map.get(k) or k, "value": v}
+            )
         if rows:
             snapshots.append({"stage_label": label, "rows": rows})
     return snapshots
@@ -1034,20 +1078,18 @@ def _get_submit_source(ticket):
 
 
 def _infer_submit_source_from_user(user):
-    profile = getattr(user, "profile", None)
-    if not profile:
-        return "hcs"
-    ids = [s.lower() for s in profile.identity_list()]
-    if "bu" in ids:
+    roles = set(_ticket_user_roles(user))
+    if "bu" in roles:
         return "bu"
     return "hcs"
 
 
-def _ticket_user_identities(user):
-    profile = getattr(user, "profile", None)
-    if not profile:
+def _ticket_user_roles(user):
+    if not getattr(user, "is_authenticated", False):
         return []
-    return [s.strip().lower() for s in profile.identity_list() if s.strip()]
+    return list(
+        user.user_roles.select_related("role").values_list("role__slug", flat=True)
+    )
 
 
 def _is_field_visible(fd, all_values):
@@ -1086,6 +1128,35 @@ def _match_conditions(conds, values):
 
 def _can_operate_ticket(user, ticket):
     return bool(ticket.assignee_id and ticket.assignee_id == user.id)
+
+
+def _field_group(key, widget):
+    if widget in {"textarea", "user_multi_select"}:
+        return "处理说明"
+    if key in {"start_date", "site", "severity", "business_env", "issue_description"}:
+        return "基础信息"
+    if key in {
+        "introduced_module",
+        "owned_module",
+        "issue_type",
+        "issue_type_prejudge",
+        "root_cause",
+        "root_cause_category",
+        "dts_no",
+        "is_quality_issue",
+        "is_frontend_pass",
+    }:
+        return "定位分析"
+    if key in {
+        "need_alert",
+        "business_impact",
+        "external_reply",
+        "involves_fault_recovery",
+        "close_reason",
+        "disposition",
+    }:
+        return "闭环信息"
+    return "其他信息"
 
 
 def _stage_timeline(ticket):

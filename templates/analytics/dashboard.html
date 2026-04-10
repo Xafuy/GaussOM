@@ -20,6 +20,10 @@
     <div class="card kpi"><div class="meta">平均闭环时长</div><div class="kpi-num">{{ dashboard_data.overview.avg_close_hours }}h</div></div>
     <div class="card kpi"><div class="meta">超时率</div><div class="kpi-num">{{ dashboard_data.overview.overdue_rate }}%</div></div>
   </div>
+  <div class="kpi-grid" style="margin-top:8px;">
+    <div class="card kpi"><div class="meta">运维独立问题闭环率</div><div class="kpi-num">{{ dashboard_data.efficiency.ops_independent_close_rate }}%</div><div class="meta">({{ dashboard_data.efficiency.ops_independent_closed }}/{{ dashboard_data.efficiency.ops_independent_total }})</div></div>
+    <div class="card kpi"><div class="meta">开发问题闭环率</div><div class="kpi-num">{{ dashboard_data.efficiency.dev_close_rate }}%</div><div class="meta">({{ dashboard_data.efficiency.dev_closed }}/{{ dashboard_data.efficiency.dev_total }})</div></div>
+  </div>
 </div>
 
 <div class="chart-grid">
@@ -32,6 +36,8 @@
   <div class="card"><h2 class="compact-title">透传分析（阶段停留时长）</h2><div id="chart_dwell" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">SLA 趋势</h2><div id="chart_sla" class="chart"></div></div>
   <div class="card"><h2 class="compact-title">排班联动（白天/夜间）</h2><div id="chart_daynight" class="chart"></div><p class="meta">请假重叠次数：{{ dashboard_data.schedule.leave_overlap }}</p></div>
+  <div class="card"><h2 class="compact-title">模块 SLA（按关闭工单）</h2><div id="chart_module_sla" class="chart"></div></div>
+  <div class="card"><h2 class="compact-title">人员 SLA（按关单人）</h2><div id="chart_person_sla" class="chart"></div></div>
 </div>
 
 {{ dashboard_data|json_script:"dashboardData" }}
@@ -81,8 +87,10 @@
     bar("chart_dwell", data.flow.dwell_avg_hours, "小时");
     line("chart_sla", data.sla.x, { "新增工单": data.sla.total, "超时工单": data.sla.overdue });
     pie("chart_daynight", data.schedule.day_night);
+    bar("chart_module_sla", data.efficiency.module_sla_rate, "SLA内关闭率(%)");
+    bar("chart_person_sla", data.efficiency.person_sla_rate, "SLA内关闭率(%)");
     window.addEventListener("resize", function () {
-      ["chart_assignee","chart_operator","chart_collab","chart_module","chart_severity","chart_flow","chart_dwell","chart_sla","chart_daynight"].forEach(function(id){
+      ["chart_assignee","chart_operator","chart_collab","chart_module","chart_severity","chart_flow","chart_dwell","chart_sla","chart_daynight","chart_module_sla","chart_person_sla"].forEach(function(id){
         var inst = echarts.getInstanceByDom(document.getElementById(id));
         if (inst) inst.resize();
       });

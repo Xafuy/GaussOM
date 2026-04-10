@@ -386,6 +386,7 @@ th {
   border-radius: 999px;
   font-size: 12px;
   border: 1px solid var(--border);
+  color: var(--text-secondary);
 }
 
 .timeline-done {
@@ -393,8 +394,11 @@ th {
 }
 
 .timeline-current {
-  background: rgba(0, 113, 227, 0.12);
+  background: rgba(0, 113, 227, 0.18);
   font-weight: 600;
+  color: #0059b8;
+  border-color: rgba(0, 113, 227, 0.45);
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.12);
 }
 
 .timeline-todo {

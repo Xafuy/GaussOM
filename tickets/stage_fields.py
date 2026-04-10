@@ -84,7 +84,7 @@ STAGE_FIELD_DEFS = {
     ],
     TicketStage.OPS_ANALYSIS: [
         _row("disposition", "处理方式", required=True, widget="select", options=[]),
-        _row("introduced_module", "问题引入模块", required=True),
+        _row("introduced_module", "问题引入模块", required=True, widget="module_cascade"),
         _row("start_date", "起始日期"),
         _row("severity", "问题严重性"),
         _row("site", "局点"),

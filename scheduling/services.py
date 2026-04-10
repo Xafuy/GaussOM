@@ -4,9 +4,9 @@ from django.utils import timezone
 
 from .models import (
     DutyAssignment,
-    IdentityRouteRule,
     LeaveRequest,
     OnCallStatus,
+    RoleRouteRule,
     RotaMember,
 )
 
@@ -25,7 +25,7 @@ def is_user_on_approved_leave(user, when_dt=None):
     ).exists()
 
 
-def pick_assignee(when_dt=None, identities=None):
+def pick_assignee(when_dt=None, role_slugs=None):
     """
     基础分单：
     - 工作日白天：轮值表成员（在线/忙碌）
@@ -36,8 +36,8 @@ def pick_assignee(when_dt=None, identities=None):
     local = timezone.localtime(when_dt)
     is_workday_daytime = local.weekday() < 5 and WORK_START <= local.time() < WORK_END
 
-    identities = identities or []
-    route = _match_route_rule(is_workday_daytime, identities)
+    role_slugs = role_slugs or []
+    route = _match_route_rule(is_workday_daytime, role_slugs)
 
     if is_workday_daytime:
         members = (
@@ -51,13 +51,29 @@ def pick_assignee(when_dt=None, identities=None):
         )
         if route and route.rota_table_id:
             members = members.filter(rota_id=route.rota_table_id)
+        candidate_total = members.count()
+        skipped_on_leave = 0
         for member in members:
             if not is_user_on_approved_leave(member.user, when_dt=when_dt):
-                note = "轮值表自动分配（工作日白天）"
-                if route and route.rota_table:
-                    note += "，命中路由表:%s" % route.rota_table.slug
+                note = _route_observe_note(
+                    mode="轮值",
+                    is_daytime=True,
+                    route=route,
+                    role_slugs=role_slugs,
+                    candidate_total=candidate_total,
+                    skipped_on_leave=skipped_on_leave,
+                )
                 return member.user, note
-        return None, "轮值表无可用人员"
+            skipped_on_leave += 1
+        return None, _route_observe_note(
+            mode="轮值",
+            is_daytime=True,
+            route=route,
+            role_slugs=role_slugs,
+            candidate_total=candidate_total,
+            skipped_on_leave=skipped_on_leave,
+            failed=True,
+        )
 
     assignments = (
         DutyAssignment.objects.select_related("user", "sheet")
@@ -66,31 +82,43 @@ def pick_assignee(when_dt=None, identities=None):
     )
     if route and route.duty_sheet_id:
         assignments = assignments.filter(sheet_id=route.duty_sheet_id)
+    candidate_total = assignments.count()
+    skipped_on_leave = 0
     for assignment in assignments:
         if not is_user_on_approved_leave(assignment.user, when_dt=when_dt):
-            note = "值班表自动分配（晚间/节假日）"
-            if route and route.duty_sheet:
-                note += "，命中路由表:%s" % route.duty_sheet.slug
+            note = _route_observe_note(
+                mode="值班",
+                is_daytime=False,
+                route=route,
+                role_slugs=role_slugs,
+                candidate_total=candidate_total,
+                skipped_on_leave=skipped_on_leave,
+            )
             return assignment.user, note
-    return None, "值班表无可用人员"
-
-
-def _match_route_rule(is_daytime, identities):
-    window = (
-        IdentityRouteRule.TimeWindow.DAY
-        if is_daytime
-        else IdentityRouteRule.TimeWindow.NIGHT
+        skipped_on_leave += 1
+    return None, _route_observe_note(
+        mode="值班",
+        is_daytime=False,
+        route=route,
+        role_slugs=role_slugs,
+        candidate_total=candidate_total,
+        skipped_on_leave=skipped_on_leave,
+        failed=True,
     )
-    chain = [i.lower() for i in identities if i] + ["hcs", "guest"]
+
+
+def _match_route_rule(is_daytime, role_slugs):
+    window = RoleRouteRule.TimeWindow.DAY if is_daytime else RoleRouteRule.TimeWindow.NIGHT
+    chain = [i.lower() for i in role_slugs if i]
     seen = set()
-    for identity in chain:
-        if identity in seen:
+    for slug in chain:
+        if slug in seen:
             continue
-        seen.add(identity)
+        seen.add(slug)
         rule = (
-            IdentityRouteRule.objects.select_related("rota_table", "duty_sheet")
+            RoleRouteRule.objects.select_related("role", "rota_table", "duty_sheet")
             .filter(
-                identity=identity,
+                role__slug=slug,
                 time_window=window,
                 is_active=True,
             )
@@ -100,3 +128,24 @@ def _match_route_rule(is_daytime, identities):
         if rule:
             return rule
     return None
+
+
+def _route_observe_note(
+    mode, is_daytime, route, role_slugs, candidate_total, skipped_on_leave, failed=False
+):
+    win = "day" if is_daytime else "night"
+    role_part = ",".join([s for s in role_slugs if s]) or "-"
+    if route:
+        route_part = "rule#%s/%s/%s" % (route.id, route.role.slug, route.time_window)
+    else:
+        route_part = "rule#none"
+    status = "无可用人员" if failed else "命中可派人"
+    return "%s分单[%s] roles=%s %s candidates=%s leave_skipped=%s result=%s" % (
+        mode,
+        win,
+        role_part,
+        route_part,
+        candidate_total,
+        skipped_on_leave,
+        status,
+    )

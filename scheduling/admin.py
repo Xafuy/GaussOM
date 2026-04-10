@@ -7,9 +7,9 @@ from rbac.services import can_join_duty_rota
 from .models import (
     DutyAssignment,
     DutySheet,
-    IdentityRouteRule,
     LeaveApproverConfig,
     LeaveRequest,
+    RoleRouteRule,
     RotaMember,
     RotaTable,
 )
@@ -87,15 +87,15 @@ class LeaveApproverConfigAdmin(admin.ModelAdmin):
     raw_id_fields = ("approver",)
 
 
-@admin.register(IdentityRouteRule)
-class IdentityRouteRuleAdmin(admin.ModelAdmin):
+@admin.register(RoleRouteRule)
+class RoleRouteRuleAdmin(admin.ModelAdmin):
     list_display = (
-        "identity",
+        "role",
         "time_window",
         "rota_table",
         "duty_sheet",
         "priority",
         "is_active",
     )
-    list_filter = ("identity", "time_window", "is_active")
+    list_filter = ("role", "time_window", "is_active")
     list_editable = ("priority", "is_active")

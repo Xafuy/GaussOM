@@ -14,6 +14,7 @@ from scheduling.models import (
     LeaveApproverConfig,
     LeaveRequest,
     OnCallStatus,
+    RoleRouteRule,
     RotaMember,
     RotaTable,
 )
@@ -109,7 +110,6 @@ class Command(BaseCommand):
             ("demo_dev_b", False, "开发", "崔乐然"),
         ]
         out = {}
-        identity_map = {"访客": "guest", "运维": "ops", "开发": "dev", "管控": "control", "BU": "bu"}
         for username, is_staff, identity_cn, cn_name in user_specs:
             user, _ = User.objects.get_or_create(
                 username=username,
@@ -125,7 +125,7 @@ class Command(BaseCommand):
             user.set_password("Demo@123456")
             user.save()
             profile, _ = UserProfile.objects.get_or_create(user=user)
-            profile.identities = identity_map.get(identity_cn, "guest")
+            profile.identities = ""
             profile.save()
             out[username] = user
         return out
@@ -231,38 +231,44 @@ class Command(BaseCommand):
         )
         RotaMember.objects.filter(rota=public_rota, user=users["demo_bu"]).delete()
 
-        IdentityRouteRule.objects.update_or_create(
-            identity=IdentityRouteRule.Identity.BU,
-            time_window=IdentityRouteRule.TimeWindow.DAY,
-            priority=10,
-            defaults={"rota_table": bu_rota, "duty_sheet": None, "is_active": True},
-        )
-        IdentityRouteRule.objects.update_or_create(
-            identity=IdentityRouteRule.Identity.BU,
-            time_window=IdentityRouteRule.TimeWindow.NIGHT,
-            priority=10,
-            defaults={"rota_table": None, "duty_sheet": bu_duty, "is_active": True},
-        )
-        IdentityRouteRule.objects.update_or_create(
-            identity=IdentityRouteRule.Identity.CONTROL,
-            time_window=IdentityRouteRule.TimeWindow.DAY,
-            priority=10,
-            defaults={
-                "rota_table": control_rota,
-                "duty_sheet": None,
-                "is_active": True,
-            },
-        )
-        IdentityRouteRule.objects.update_or_create(
-            identity=IdentityRouteRule.Identity.CONTROL,
-            time_window=IdentityRouteRule.TimeWindow.NIGHT,
-            priority=10,
-            defaults={
-                "rota_table": None,
-                "duty_sheet": control_duty,
-                "is_active": True,
-            },
-        )
+        role_bu = Role.objects.filter(slug="bu").first()
+        role_control = Role.objects.filter(slug="control").first()
+        if role_bu:
+            RoleRouteRule.objects.update_or_create(
+                role=role_bu,
+                time_window=RoleRouteRule.TimeWindow.DAY,
+                priority=10,
+                defaults={"rota_table": bu_rota, "duty_sheet": None, "is_active": True},
+            )
+            RoleRouteRule.objects.update_or_create(
+                role=role_bu,
+                time_window=RoleRouteRule.TimeWindow.NIGHT,
+                priority=10,
+                defaults={"rota_table": None, "duty_sheet": bu_duty, "is_active": True},
+            )
+        if role_control:
+            RoleRouteRule.objects.update_or_create(
+                role=role_control,
+                time_window=RoleRouteRule.TimeWindow.DAY,
+                priority=10,
+                defaults={
+                    "rota_table": control_rota,
+                    "duty_sheet": None,
+                    "is_active": True,
+                },
+            )
+        # 旧身份路由已废弃：清理历史规则，避免后台/数据层误解
+        IdentityRouteRule.objects.all().delete()
+            RoleRouteRule.objects.update_or_create(
+                role=role_control,
+                time_window=RoleRouteRule.TimeWindow.NIGHT,
+                priority=10,
+                defaults={
+                    "rota_table": None,
+                    "duty_sheet": control_duty,
+                    "is_active": True,
+                },
+            )
 
         now = timezone.now()
         LeaveRequest.objects.update_or_create(

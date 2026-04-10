@@ -4,6 +4,7 @@ from django.shortcuts import render
 
 from .services import (
     collaboration_metrics,
+    efficiency_metrics,
     flow_metrics,
     manpower_metrics,
     overview_metrics,
@@ -25,6 +26,7 @@ def dashboard(request):
         "flow": flow_metrics(start_dt, end_dt),
         "sla": sla_trend_metrics(start_dt, end_dt),
         "schedule": schedule_link_metrics(start_dt, end_dt),
+        "efficiency": efficiency_metrics(start_dt, end_dt),
         "range_mode": mode,
         "start": start_dt.strftime("%Y-%m-%d"),
         "end": end_dt.strftime("%Y-%m-%d"),
@@ -43,6 +45,7 @@ def dashboard_api(request):
         "flow": flow_metrics(start_dt, end_dt),
         "sla": sla_trend_metrics(start_dt, end_dt),
         "schedule": schedule_link_metrics(start_dt, end_dt),
+        "efficiency": efficiency_metrics(start_dt, end_dt),
         "range_mode": mode,
         "start": start_dt.strftime("%Y-%m-%d"),
         "end": end_dt.strftime("%Y-%m-%d"),

@@ -221,3 +221,101 @@ def schedule_link_metrics(start_dt, end_dt):
         ],
         "leave_overlap": leave_overlap,
     }
+
+
+def efficiency_metrics(start_dt, end_dt):
+    """
+    运维效率分析：
+    - 模块SLA：按模块统计在SLA内关闭率（仅统计窗口内关闭）
+    - 人员SLA：按关单操作人统计在SLA内关闭率（仅统计窗口内关闭）
+    - 运维人员独立问题闭环率：进入运维分析且未进入开发阶段的工单，最终关闭占比
+    - 开发人员问题闭环率：进入开发阶段的工单，最终关闭占比
+    """
+    closed_logs = (
+        TicketTransitionLog.objects.filter(
+            to_stage=TicketStage.CLOSED,
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        )
+        .select_related("ticket", "operator")
+        .order_by("ticket_id", "-created_at")
+    )
+    latest_close = {}
+    for lg in closed_logs:
+        latest_close.setdefault(lg.ticket_id, lg)
+
+    module_counter = {}
+    person_counter = {}
+    for lg in latest_close.values():
+        t = lg.ticket
+        sev = _field_from_ticket(t, ["severity"])
+        target = SLA_HOURS.get(sev)
+        if not target:
+            continue
+        hours = (lg.created_at - t.created_at).total_seconds() / 3600.0
+        in_sla = hours <= target
+
+        module = _field_from_ticket(t, ["owned_module", "introduced_module"]) or "未填写"
+        mod = module_counter.setdefault(module, {"total": 0, "in_sla": 0})
+        mod["total"] += 1
+        if in_sla:
+            mod["in_sla"] += 1
+
+        person = (
+            (lg.operator.get_full_name() or "").strip() or lg.operator.username
+            if lg.operator
+            else "未知"
+        )
+        psn = person_counter.setdefault(person, {"total": 0, "in_sla": 0})
+        psn["total"] += 1
+        if in_sla:
+            psn["in_sla"] += 1
+
+    def to_rate_rows(counter):
+        rows = []
+        for name, d in counter.items():
+            rate = round((d["in_sla"] * 100.0 / d["total"]), 2) if d["total"] else 0
+            rows.append({"name": name, "value": rate, "total": d["total"]})
+        rows.sort(key=lambda x: (x["value"], x["total"]), reverse=True)
+        return rows[:20]
+
+    tickets = Ticket.objects.filter(created_at__gte=start_dt, created_at__lte=end_dt)
+    independent_total = 0
+    independent_closed = 0
+    dev_total = 0
+    dev_closed = 0
+    for t in tickets:
+        logs = list(t.transitions.values_list("to_stage", flat=True))
+        entered_ops = TicketStage.OPS_ANALYSIS in logs or t.stage == TicketStage.OPS_ANALYSIS
+        entered_dev = (
+            TicketStage.DEV_ANALYSIS in logs
+            or TicketStage.DEV_REVIEW in logs
+            or t.stage in {TicketStage.DEV_ANALYSIS, TicketStage.DEV_REVIEW}
+        )
+        is_closed = t.stage == TicketStage.CLOSED or TicketStage.CLOSED in logs
+        if entered_ops and not entered_dev:
+            independent_total += 1
+            if is_closed:
+                independent_closed += 1
+        if entered_dev:
+            dev_total += 1
+            if is_closed:
+                dev_closed += 1
+
+    independent_rate = (
+        round(independent_closed * 100.0 / independent_total, 2)
+        if independent_total
+        else 0
+    )
+    dev_close_rate = round(dev_closed * 100.0 / dev_total, 2) if dev_total else 0
+
+    return {
+        "module_sla_rate": to_rate_rows(module_counter),
+        "person_sla_rate": to_rate_rows(person_counter),
+        "ops_independent_close_rate": independent_rate,
+        "ops_independent_total": independent_total,
+        "ops_independent_closed": independent_closed,
+        "dev_close_rate": dev_close_rate,
+        "dev_total": dev_total,
+        "dev_closed": dev_closed,
+    }

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ticket_extras %}
 {% block title %}#{{ ticket.number }} {{ ticket.title }}{% endblock %}
 {% block content %}
 <div class="card">
@@ -15,11 +16,16 @@
   <p class="meta ticket-meta">提单人：{{ ticket.reporter.get_full_name|default:ticket.reporter.username }} · 当前处理人：{% if ticket.assignee %}{{ ticket.assignee.get_full_name|default:ticket.assignee.username }}{% else %}未分配{% endif %}</p>
   <div class="stage-timeline">
     {% for node in stage_timeline %}
-      <span class="timeline-node timeline-{{ node.status }}">{{ node.label }}</span>
+      <span class="timeline-node timeline-{{ node.status }}">
+        {% if node.status == "current" %}当前 · {% endif %}{{ node.label }}
+      </span>
     {% endfor %}
   </div>
+  {% if next_path_labels %}
+  <p class="meta">可流转路径：{{ next_path_labels|join:"；" }}</p>
+  {% endif %}
   {% if ticket.description %}
-  <p style="white-space:pre-wrap">{{ ticket.description }}</p>
+  <p style="white-space:normal">{{ ticket.description|render_rich_text }}</p>
   {% endif %}
 </div>
 
@@ -29,12 +35,26 @@
   {% if can_edit_fields %}
   <form method="post">
     {% csrf_token %}
+    {% regroup stage_form_rows by group as row_groups %}
+    {% for grp in row_groups %}
+    <h3 class="meta" style="margin:8px 0 6px;">{{ grp.grouper }}</h3>
     <div class="detail-fields-grid">
-    {% for row in stage_form_rows %}
+    {% for row in grp.list %}
       <div class="form-group{% if row.widget == 'textarea' or row.widget == 'user_multi_select' or row.widget == 'module_cascade' %} form-group-span-full{% endif %}">
         <label for="fld_{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required-star">*</span>{% endif %}</label>
         {% if row.widget == "textarea" %}
-        <textarea id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>{{ row.value }}</textarea>
+        <textarea
+          id="fld_{{ row.key }}"
+          name="{{ row.key }}"
+          class="js-paste-image"
+          data-upload-url="{% url 'ticket_upload_image' ticket.pk %}"
+          {% if row.required %} required{% endif %}
+        >{{ row.value }}</textarea>
+        <p class="meta">
+          支持直接粘贴截图，系统将自动上传并插入图片链接。
+          <button type="button" class="btn btn-secondary js-remove-last-image" data-target="fld_{{ row.key }}">删除最近一张图片链接</button>
+          <span class="meta js-upload-status" data-target="fld_{{ row.key }}"></span>
+        </p>
         {% elif row.widget == "select" %}
         <select id="fld_{{ row.key }}" name="{{ row.key }}"{% if row.required %} required{% endif %}>
           <option value="">请选择</option>
@@ -85,6 +105,7 @@
       </div>
     {% endfor %}
     </div>
+    {% endfor %}
     {% if advance_options and can_advance %}
     <div class="detail-fields-flow ticket-actions">
       <label for="advance_choice">处理方式</label>
@@ -178,6 +199,97 @@
   })();
   </script>
   {% endif %}
+  <script>
+  (function () {
+    function getCookie(name) {
+      var value = "; " + document.cookie;
+      var parts = value.split("; " + name + "=");
+      if (parts.length === 2) return parts.pop().split(";").shift();
+      return "";
+    }
+    function insertAtCursor(el, text) {
+      var start = el.selectionStart || 0;
+      var end = el.selectionEnd || 0;
+      var val = el.value || "";
+      el.value = val.slice(0, start) + text + val.slice(end);
+      var cursor = start + text.length;
+      el.setSelectionRange(cursor, cursor);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    var csrf = getCookie("csrftoken");
+    document.querySelectorAll("textarea.js-paste-image").forEach(function (ta) {
+      var statusEl = document.querySelector(".js-upload-status[data-target='" + ta.id + "']");
+      function setStatus(msg, isErr) {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.style.color = isErr ? "#b00020" : "";
+      }
+      ta.addEventListener("paste", function (e) {
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        var imageItem = null;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.indexOf("image/") === 0) {
+            imageItem = items[i];
+            break;
+          }
+        }
+        if (!imageItem) return;
+        var blob = imageItem.getAsFile();
+        if (!blob) return;
+        e.preventDefault();
+        var form = new FormData();
+        form.append("image", blob, "paste.png");
+        var uploadUrl = ta.getAttribute("data-upload-url");
+        setStatus("图片上传中...", false);
+        function doUpload() {
+          return fetch(uploadUrl, {
+            method: "POST",
+            headers: { "X-CSRFToken": csrf },
+            body: form
+          }).then(function (res) { return res.json(); });
+        }
+        doUpload()
+          .then(function (data) {
+            if (!data || !data.ok || !data.url) {
+              throw new Error((data && data.error) || "图片上传失败");
+            }
+            insertAtCursor(ta, "\n![粘贴图片](" + data.url + ")\n");
+            setStatus("上传完成", false);
+          })
+          .catch(function (err) {
+            setStatus(err.message || "上传失败", true);
+            if (window.confirm("图片上传失败，是否重试一次？")) {
+              setStatus("重试上传中...", false);
+              doUpload()
+                .then(function (data) {
+                  if (!data || !data.ok || !data.url) {
+                    throw new Error((data && data.error) || "图片上传失败");
+                  }
+                  insertAtCursor(ta, "\n![粘贴图片](" + data.url + ")\n");
+                  setStatus("上传完成", false);
+                })
+                .catch(function (e2) {
+                  setStatus(e2.message || "重试失败", true);
+                });
+            }
+          });
+      });
+    });
+    document.querySelectorAll(".js-remove-last-image").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var ta = document.getElementById(btn.getAttribute("data-target"));
+        if (!ta) return;
+        var re = /\n?!\[[^\]]*\]\([^)]+\)\n?$/;
+        if (re.test(ta.value || "")) {
+          ta.value = (ta.value || "").replace(re, "\n");
+          ta.dispatchEvent(new Event("input", { bubbles: true }));
+        } else {
+          alert("未找到可删除的最近图片链接");
+        }
+      });
+    });
+  })();
+  </script>
   {{ module_tree|json_script:"module-tree-data" }}
   <script>
   (function () {
@@ -315,7 +427,7 @@
               {% for r in s.rows %}
               <tr>
                 <td>{{ r.label }}</td>
-                <td style="white-space:pre-wrap;">{{ r.value }}</td>
+                <td style="white-space:normal;">{{ r.value|render_rich_text }}</td>
               </tr>
               {% endfor %}
             </tbody>

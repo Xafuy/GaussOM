@@ -99,6 +99,7 @@ class DutyAssignment(models.Model):
 
 
 class IdentityRouteRule(models.Model):
+    """已废弃：历史身份路由模型，仅为兼容历史数据保留，不再参与分单。"""
     class Identity(models.TextChoices):
         BU = "bu", "BU"
         CONTROL = "control", "管控"
@@ -141,6 +142,48 @@ class IdentityRouteRule(models.Model):
 
     def __str__(self):
         return "%s-%s-%s" % (self.identity, self.time_window, self.priority)
+
+
+class RoleRouteRule(models.Model):
+    class TimeWindow(models.TextChoices):
+        DAY = "day", "工作日白天"
+        NIGHT = "night", "晚间/节假日"
+
+    role = models.ForeignKey(
+        "rbac.Role",
+        on_delete=models.CASCADE,
+        related_name="schedule_route_rules",
+        verbose_name="角色",
+    )
+    time_window = models.CharField("时间窗口", max_length=16, choices=TimeWindow.choices)
+    rota_table = models.ForeignKey(
+        RotaTable,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="role_routes",
+        verbose_name="命中轮值表",
+    )
+    duty_sheet = models.ForeignKey(
+        DutySheet,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="role_routes",
+        verbose_name="命中值班表",
+    )
+    priority = models.PositiveIntegerField("优先级", default=100)
+    is_active = models.BooleanField("启用", default=True)
+    note = models.CharField("说明", max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "角色分单路由规则"
+        verbose_name_plural = verbose_name
+        ordering = ("priority", "id")
+        unique_together = ("role", "time_window", "priority")
+
+    def __str__(self):
+        return "%s-%s-%s" % (self.role.slug, self.time_window, self.priority)
 
 
 class LeaveRequest(models.Model):

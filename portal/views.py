@@ -8,9 +8,9 @@ from datetime import datetime
 from scheduling.models import (
     DutyAssignment,
     DutySheet,
-    IdentityRouteRule,
     LeaveApproverConfig,
     LeaveRequest,
+    RoleRouteRule,
     RotaTable,
 )
 from rbac.services import can_create_ticket, can_join_duty_rota
@@ -185,9 +185,9 @@ def duty_overview(request):
                 )
             cal_rows.append(line)
     rules = (
-        IdentityRouteRule.objects.select_related("rota_table", "duty_sheet")
+        RoleRouteRule.objects.select_related("role", "rota_table", "duty_sheet")
         .filter(is_active=True)
-        .order_by("identity", "time_window", "priority")
+        .order_by("role__slug", "time_window", "priority")
     )
     selected_user_ids_for_date = []
     if selected_sheet:
